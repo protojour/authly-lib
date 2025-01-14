@@ -1,6 +1,6 @@
 //! Authly service utilities and helpers
 
-use std::collections::HashMap;
+use std::collections::{hash_map, HashMap};
 
 use fnv::FnvHashSet;
 
@@ -12,8 +12,9 @@ pub struct PropertyMapping {
     properties: HashMap<String, AttributeMappings>,
 }
 
+/// Attribute mappings for a property.
 #[derive(Default)]
-struct AttributeMappings {
+pub struct AttributeMappings {
     attributes: HashMap<String, ObjId>,
 }
 
@@ -55,5 +56,23 @@ impl PropertyMapping {
         }
 
         output
+    }
+}
+
+impl IntoIterator for PropertyMapping {
+    type IntoIter = hash_map::IntoIter<String, AttributeMappings>;
+    type Item = (String, AttributeMappings);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.properties.into_iter()
+    }
+}
+
+impl IntoIterator for AttributeMappings {
+    type IntoIter = hash_map::IntoIter<String, ObjId>;
+    type Item = (String, ObjId);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.attributes.into_iter()
     }
 }
