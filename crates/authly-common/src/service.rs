@@ -4,7 +4,7 @@ use std::collections::{hash_map, HashMap};
 
 use fnv::FnvHashSet;
 
-use crate::id::ObjId;
+use crate::id::{AnyId, ObjId};
 
 /// A property mapping maps human-readable property and attribute labels to [ObjId]s.
 #[derive(Default)]
@@ -42,7 +42,7 @@ impl PropertyMapping {
     pub fn translate<'a>(
         &self,
         attributes: impl IntoIterator<Item = (&'a str, &'a str)>,
-    ) -> FnvHashSet<u128> {
+    ) -> FnvHashSet<AnyId> {
         let mut output = FnvHashSet::default();
         for (prop, attr) in attributes {
             let Some(attr_mappings) = self.properties.get(prop) else {
@@ -52,7 +52,7 @@ impl PropertyMapping {
                 continue;
             };
 
-            output.insert(attr_id.value());
+            output.insert(attr_id.to_any());
         }
 
         output

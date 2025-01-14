@@ -5,6 +5,8 @@ use std::collections::BTreeSet;
 use fnv::{FnvHashMap, FnvHashSet};
 use tracing::error;
 
+use crate::id::{AnyId, ObjId};
+
 use super::code::{Bytecode, Outcome};
 
 /// Evaluation error.
@@ -26,16 +28,16 @@ pub enum EvalError {
 #[derive(Default, Debug)]
 pub struct AccessControlParams {
     /// Entity IDs related to the `subject`.
-    pub subject_eids: FnvHashMap<u128, u128>,
+    pub subject_eids: FnvHashMap<AnyId, AnyId>,
 
     /// Attributes related to the `subject`.
-    pub subject_attrs: FnvHashSet<u128>,
+    pub subject_attrs: FnvHashSet<AnyId>,
 
     /// Entity IDs related to the `resource`.
-    pub resource_eids: FnvHashMap<u128, u128>,
+    pub resource_eids: FnvHashMap<AnyId, AnyId>,
 
     /// Attributes related to the `resource`.
-    pub resource_attrs: FnvHashSet<u128>,
+    pub resource_attrs: FnvHashSet<AnyId>,
 }
 
 /// The state of the policy engine.
@@ -46,21 +48,21 @@ pub struct PolicyEngine {
     policies: FnvHashMap<PolicyId, Policy>,
 
     /// Policy triggers: The hash map is keyed by the smallest attribute in the match set
-    policy_triggers: FnvHashMap<u128, PolicyTrigger>,
+    policy_triggers: FnvHashMap<AnyId, PolicyTrigger>,
 }
 
 /// The policy trigger maps a set of attributes to a policy.
 #[derive(Debug)]
 struct PolicyTrigger {
     /// The set of attributes that has to match for this policy to trigger
-    pub attr_matcher: BTreeSet<u128>,
+    pub attr_matcher: BTreeSet<AnyId>,
 
     /// The policy which gets triggered by this attribute matcher
     pub policy_id: PolicyId,
 }
 
 /// A placeholder for how to refer to a local policy
-type PolicyId = u128;
+type PolicyId = AnyId;
 
 #[derive(Debug)]
 struct Policy {
@@ -70,8 +72,8 @@ struct Policy {
 #[derive(PartialEq, Eq, Debug)]
 enum StackItem<'a> {
     Uint(u64),
-    IdSet(&'a FnvHashSet<u128>),
-    Id(u128),
+    IdSet(&'a FnvHashSet<AnyId>),
+    Id(AnyId),
 }
 
 struct EvalCtx {
@@ -81,9 +83,9 @@ struct EvalCtx {
 
 impl PolicyEngine {
     /// Adds a new policy to the engine.
-    pub fn add_policy(&mut self, id: PolicyId, policy_bytecode: Vec<u8>) {
+    pub fn add_policy(&mut self, id: ObjId, policy_bytecode: Vec<u8>) {
         self.policies.insert(
-            id,
+            id.to_any(),
             Policy {
                 bytecode: policy_bytecode,
             },
@@ -91,13 +93,13 @@ impl PolicyEngine {
     }
 
     /// Adds a new policy trigger to the engine.
-    pub fn add_policy_trigger(&mut self, attr_matcher: BTreeSet<u128>, policy_id: PolicyId) {
+    pub fn add_policy_trigger(&mut self, attr_matcher: BTreeSet<AnyId>, policy_id: ObjId) {
         if let Some(first_attr) = attr_matcher.iter().next() {
             self.policy_triggers.insert(
-                *first_attr,
+                first_attr.to_any(),
                 PolicyTrigger {
                     attr_matcher,
-                    policy_id,
+                    policy_id: policy_id.to_any(),
                 },
             );
         }
@@ -150,7 +152,7 @@ impl PolicyEngine {
 
     fn eval_triggers(
         &self,
-        attr: u128,
+        attr: AnyId,
         params: &AccessControlParams,
         eval_ctx: &mut EvalCtx,
     ) -> Result<(), EvalError> {
@@ -218,9 +220,7 @@ fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<Outcome, E
 
         match code {
             Bytecode::LoadSubjectId => {
-                let Ok((key, next)) = unsigned_varint::decode::u128(pc) else {
-                    return Err(EvalError::Type);
-                };
+                let (key, next) = decode_id(pc)?;
                 let Some(id) = params.subject_eids.get(&key) else {
                     return Err(EvalError::Type);
                 };
@@ -231,9 +231,7 @@ fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<Outcome, E
                 stack.push(StackItem::IdSet(&params.subject_attrs));
             }
             Bytecode::LoadResourceId => {
-                let Ok((key, next)) = unsigned_varint::decode::u128(pc) else {
-                    return Err(EvalError::Type);
-                };
+                let (key, next) = decode_id(pc)?;
                 let Some(id) = params.resource_eids.get(&key) else {
                     return Err(EvalError::Type);
                 };
@@ -244,9 +242,7 @@ fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<Outcome, E
                 stack.push(StackItem::IdSet(&params.resource_attrs));
             }
             Bytecode::LoadConstId => {
-                let Ok((id, next)) = unsigned_varint::decode::u128(pc) else {
-                    return Err(EvalError::Type);
-                };
+                let (id, next) = decode_id(pc)?;
                 stack.push(StackItem::Id(id));
                 pc = next;
             }
@@ -344,4 +340,10 @@ fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<Outcome, E
     }
 
     Ok(Outcome::Deny)
+}
+
+fn decode_id(buf: &[u8]) -> Result<(AnyId, &[u8]), EvalError> {
+    let (uint, next) = unsigned_varint::decode::u128(buf).map_err(|_| EvalError::Program)?;
+
+    Ok((AnyId::from_uint(uint), next))
 }

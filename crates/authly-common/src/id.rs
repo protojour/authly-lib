@@ -1,37 +1,33 @@
 //! Authly identifier types
-use std::{fmt::Debug, hash::Hash, io::Cursor, marker::PhantomData, str::FromStr};
+use std::{
+    fmt::{Debug, Display},
+    hash::Hash,
+    marker::PhantomData,
+    str::FromStr,
+};
 
-use byteorder::{BigEndian, ReadBytesExt};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::FromStrVisitor;
 
 /// Authly generic 128-bit identifier
-pub struct Id128<K>(u128, PhantomData<K>);
+pub struct Id128<K>([u8; 16], PhantomData<K>);
 
 impl<K> Id128<K> {
     /// Construct a new identifier from a 128-bit unsigned int.
-    pub const fn new(val: u128) -> Self {
-        Self(val, PhantomData)
-    }
-
-    /// The 128-bit unsigned integer value of the ID.
-    pub const fn value(&self) -> u128 {
-        self.0
+    pub const fn from_uint(val: u128) -> Self {
+        Self(val.to_be_bytes(), PhantomData)
     }
 
     /// Get the byte-wise representation of the ID.
     pub const fn to_bytes(self) -> [u8; 16] {
-        self.0.to_be_bytes()
+        self.0
     }
 
     /// Try to deserialize from a byte representation.
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        Some(Self(
-            Cursor::new(bytes).read_u128::<BigEndian>().ok()?,
-            PhantomData,
-        ))
+        Some(Self(bytes.try_into().ok()?, PhantomData))
     }
 
     /// Create a new random identifier.
@@ -40,9 +36,19 @@ impl<K> Id128<K> {
             let id: u128 = rand::thread_rng().gen();
             // low IDs are reserved for builtin/fixed
             if id > u16::MAX as u128 {
-                return Self(id, PhantomData);
+                return Self(id.to_be_bytes(), PhantomData);
             }
         }
+    }
+
+    /// Convert typed ID to [AnyId].
+    pub const fn to_any(&self) -> AnyId {
+        Id128(self.0, PhantomData)
+    }
+
+    /// Convert to an unsigned integer
+    pub fn to_uint(&self) -> u128 {
+        u128::from_be_bytes(self.0)
     }
 }
 
@@ -80,9 +86,27 @@ impl<K> Hash for Id128<K> {
     }
 }
 
+impl<K> From<[u8; 16]> for Id128<K> {
+    fn from(value: [u8; 16]) -> Self {
+        Self(value, PhantomData)
+    }
+}
+
+impl<K> From<&[u8; 16]> for Id128<K> {
+    fn from(value: &[u8; 16]) -> Self {
+        Self(*value, PhantomData)
+    }
+}
+
 impl<K> Debug for Id128<K> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", hexhex::hex(&self.0))
+    }
+}
+
+impl<K> Display for Id128<K> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hexhex::hex(&self.0))
     }
 }
 
@@ -100,6 +124,9 @@ pub mod idkind {
     /// Object ID kind.
     pub struct Object;
 
+    /// Any ID kind.
+    pub struct Any;
+
     impl IdKind for Entity {
         fn name() -> &'static str {
             "entity id"
@@ -111,6 +138,12 @@ pub mod idkind {
             "entity id"
         }
     }
+
+    impl IdKind for Any {
+        fn name() -> &'static str {
+            "any id"
+        }
+    }
 }
 
 /// Authly Entity ID
@@ -118,6 +151,9 @@ pub type Eid = Id128<idkind::Entity>;
 
 /// Authly Object ID
 pub type ObjId = Id128<idkind::Object>;
+
+/// Untyped ID
+pub type AnyId = Id128<idkind::Any>;
 
 /// Builtin Object IDs
 #[derive(Clone, Copy)]
@@ -153,7 +189,7 @@ pub enum BuiltinID {
 impl BuiltinID {
     /// Convert to an [ObjId].
     pub const fn to_obj_id(self) -> ObjId {
-        Id128(self as u128, PhantomData)
+        Id128((self as u128).to_be_bytes(), PhantomData)
     }
 
     /// Get an optional label for this builtin ID.
@@ -191,13 +227,16 @@ impl<K> FromStr for Id128<K> {
     type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let id = s.parse().map_err(|_| "invalid format")?;
+        let hex = hexhex::decode(s).map_err(|_| "invalid format")?;
+        let array: [u8; 16] = hex.try_into().map_err(|_| "invalid length")?;
 
-        if id > 0 && id < 32768 {
+        let min = 32768_u128.to_be_bytes();
+
+        if array != [0; 16] && array < min {
             return Err("invalid value");
         }
 
-        Ok(Id128(id, PhantomData))
+        Ok(Id128(array, PhantomData))
     }
 }
 
@@ -215,6 +254,11 @@ impl<K> Serialize for Id128<K> {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&self.0.to_string())
+        serializer.serialize_str(&hexhex::hex(&self.0).to_string())
     }
+}
+
+#[test]
+fn from_hex_literal() {
+    let _ = AnyId::from(hexhex::hex_literal!("1234abcd1234abcd1234abcd1234abcd"));
 }

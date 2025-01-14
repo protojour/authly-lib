@@ -21,6 +21,7 @@ unstable-doc-cfg = []
 anyhow = "1"
 byteorder = "1"
 fnv = "1"
+hexhex = "1"
 int-enum = "1"
 prost = "0.13"
 rand = "0.8"
