@@ -20,6 +20,11 @@ impl<K> Id128<K> {
         Self(val.to_be_bytes(), PhantomData)
     }
 
+    /// Construct a new identifier from a reference to a byte array.
+    pub const fn from_array(array: &[u8; 16]) -> Self {
+        Self(*array, PhantomData)
+    }
+
     /// Get the byte-wise representation of the ID.
     pub const fn to_bytes(self) -> [u8; 16] {
         self.0
