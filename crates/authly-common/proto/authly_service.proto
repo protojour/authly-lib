@@ -9,6 +9,9 @@ service AuthlyService {
     // The session info is passed as Authorization header or cookie.
     rpc GetAccessToken (Empty) returns (AccessToken);
 
+    // Get the current property mapping for the service.
+    rpc GetResourcePropertyMappings (Empty) returns (PropertyMappingsResponse);
+
     // Perform remote access control.
     // A valid access token must be passed in an Authorization bearer.
     rpc AccessControl (AccessControlRequest) returns (AccessControlResponse);
@@ -17,7 +20,7 @@ service AuthlyService {
 // Metadata about the service.
 message ServiceMetadata {
     // The entity ID of this service.
-    string eid = 1;
+    bytes entity_id = 1;
 
     // The label given to this service.
     string label = 2;
@@ -30,6 +33,30 @@ message AccessToken {
 
     // The entity ID that the token represents.
     string entity_id = 2;
+}
+
+// The response of a property mappings request.
+message PropertyMappingsResponse {
+    // The list of properties.
+    repeated PropertyMapping properties = 1;
+}
+
+// A mapping for a single property.
+message PropertyMapping {
+    // The property label.
+    string label = 1;
+
+    // The list of attributes.
+    repeated AttributeMapping attributes = 2;
+}
+
+// A mapping for a single attribute of property.
+message AttributeMapping {
+    // The attribute label.
+    string label = 1;
+
+    // The attribe object id.
+    bytes obj_id = 2;
 }
 
 // An access control request.

@@ -27,6 +27,16 @@ impl PropertyMapping {
             .insert(attribute_label, attribute_id);
     }
 
+    /// Get the object ID of a single property/attribute label pair, if found.
+    pub fn attribute_object_id(
+        &self,
+        property_label: &str,
+        attribute_label: &str,
+    ) -> Option<ObjId> {
+        let attribute_mapping = self.properties.get(property_label)?;
+        attribute_mapping.attributes.get(attribute_label).cloned()
+    }
+
     /// Translate the given property/attribute labels to underlying [ObjId]s.
     pub fn translate<'a>(
         &self,
