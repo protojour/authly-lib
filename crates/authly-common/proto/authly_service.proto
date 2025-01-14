@@ -32,7 +32,7 @@ message AccessToken {
     string token = 1;
 
     // The entity ID that the token represents.
-    string entity_id = 2;
+    bytes entity_id = 2;
 }
 
 // The response of a property mappings request.
