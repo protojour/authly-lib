@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use authly_common::{
-    id::ObjId,
+    id::{Eid, ObjId},
     proto::service::{self as proto, authly_service_client::AuthlyServiceClient},
     service::PropertyMapping,
 };
@@ -24,6 +24,7 @@ pub struct AccessControlRequestBuilder<'c> {
     property_mapping: Arc<PropertyMapping>,
     access_token: Option<Arc<AccessToken>>,
     resource_attributes: FnvHashSet<ObjId>,
+    peer_entity_ids: FnvHashSet<Eid>,
 }
 
 impl<'c> AccessControlRequestBuilder<'c> {
@@ -33,6 +34,7 @@ impl<'c> AccessControlRequestBuilder<'c> {
             property_mapping: client.inner.resource_property_mapping.load_full(),
             access_token: None,
             resource_attributes: Default::default(),
+            peer_entity_ids: Default::default(),
         }
     }
 
@@ -72,8 +74,16 @@ impl<'c> AccessControlRequestBuilder<'c> {
     }
 
     /// Include an access token in the request.
+    ///
+    /// The access token is used as subject properties in the access control request.
     pub fn access_token(mut self, token: Arc<AccessToken>) -> Self {
         self.access_token = Some(token);
+        self
+    }
+
+    /// Add a peer entity ID, which represents a client acting as a subject in the access control request.
+    pub fn peer_entity_id(mut self, entity_id: Eid) -> Self {
+        self.peer_entity_ids.insert(entity_id);
         self
     }
 
@@ -87,6 +97,13 @@ impl<'c> AccessControlRequestBuilder<'c> {
                 .resource_attributes
                 .into_iter()
                 .map(|attr| attr.to_bytes().to_vec())
+                .collect(),
+            // Peer entity attributes are currently not known to the service:
+            peer_entity_attributes: vec![],
+            peer_entity_ids: self
+                .peer_entity_ids
+                .into_iter()
+                .map(|eid| eid.to_bytes().to_vec())
                 .collect(),
         });
         if let Some(access_token) = self.access_token {

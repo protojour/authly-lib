@@ -63,6 +63,13 @@ message AttributeMapping {
 message AccessControlRequest {
     // list of resource attributes in byte encoding.
     repeated bytes resource_attributes = 1;
+
+    // list of peer entity attributes known to the service.
+    // The peer is the client of the service initiating the access control request.
+    repeated bytes peer_entity_attributes = 2;
+
+    // list of peer entity ids to include as subject paramaters.
+    repeated bytes peer_entity_ids = 3;
 }
 
 // The outcome of an access control evaluation.
