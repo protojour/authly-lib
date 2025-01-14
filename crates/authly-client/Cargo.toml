@@ -12,7 +12,7 @@ rust-version.workspace = true
 publish = true
 
 [dependencies]
-authly-common = { path = "../authly-common", features = ["access_token"] }
+authly-common = { path = "../authly-common", version = "0.0.1", features = ["access_token"] }
 anyhow = "1"
 fnv = "1"
 http = "1"
