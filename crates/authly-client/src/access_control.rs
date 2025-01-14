@@ -39,6 +39,24 @@ impl<'c> AccessControlRequestBuilder<'c> {
     /// Define a labelled resource attribute to be included in the access control request.
     ///
     /// The property and attribute labels should be available to this service through authly document manifests.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use authly_client::*;
+    /// # async fn test() -> anyhow::Result<()> {
+    /// // note: Client is not properly built here.
+    /// let client = Client::builder().connect().await?;
+    ///
+    /// client.access_control_request()
+    ///     .resource_attribute("type", "orders")?
+    ///     .resource_attribute("action", "read")?
+    ///     .send()
+    ///     .await?;
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn resource_attribute(
         mut self,
         property_label: &str,
