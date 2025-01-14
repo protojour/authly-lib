@@ -1,0 +1,56 @@
+syntax = "proto3";
+package authly_service;
+
+service AuthlyService {
+    // Fetch metadata about the service using this API.
+    rpc GetMetadata (Empty) returns (ServiceMetadata);
+
+    // Exchange a valid session for an access token.
+    // The session info is passed as Authorization header or cookie.
+    rpc GetAccessToken (Empty) returns (AccessToken);
+
+    // Perform remote access control.
+    // A valid access token must be passed in an Authorization bearer.
+    rpc AccessControl (AccessControlRequest) returns (AccessControlResponse);
+}
+
+// Metadata about the service.
+message ServiceMetadata {
+    // The entity ID of this service.
+    string eid = 1;
+
+    // The label given to this service.
+    string label = 2;
+}
+
+// An access token response.
+message AccessToken {
+    // The token in encoded format.
+    string token = 1;
+
+    // The entity ID that the token represents.
+    string entity_id = 2;
+}
+
+// An access control request.
+message AccessControlRequest {
+    // list of resource attributes in byte encoding.
+    repeated bytes resource_attributes = 1;
+}
+
+// The outcome of an access control evaluation.
+enum AccessControlOutcome {
+    // Access is denied.
+    DENY = 0;
+    // Access is allowed.
+    ALLOW = 1;
+}
+
+// The response of an access control evaluation.
+message AccessControlResponse {
+    // The outcome of the access control evaluation.
+    AccessControlOutcome outcome = 1;
+}
+
+// Represents no information being sent.
+message Empty {}
