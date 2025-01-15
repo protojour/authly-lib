@@ -29,6 +29,9 @@ pub struct Document {
     #[serde(default)]
     pub members: Vec<Members>,
 
+    #[serde(default, rename = "entity-attribute-binding")]
+    pub entity_attribute_binding: Vec<EntityAttributeBinding>,
+
     #[serde(default, rename = "entity-property")]
     pub entity_property: Vec<EntityProperty>,
 
@@ -191,6 +194,19 @@ pub struct PolicyBinding {
 
     /// A set of policies triggered.
     pub policies: Vec<Spanned<String>>,
+}
+
+/// An entity attribute binding, which assigns attributes to entities.
+#[derive(Deserialize)]
+pub struct EntityAttributeBinding {
+    /// The id identifying the entity
+    pub eid: Option<Spanned<Eid>>,
+
+    /// A label identifying the entity
+    pub label: Option<Spanned<String>>,
+
+    /// The attributes assigned to the entity.
+    pub attributes: Vec<Spanned<QualifiedAttributeName>>,
 }
 
 impl Document {

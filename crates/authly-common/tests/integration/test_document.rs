@@ -29,6 +29,10 @@ service = "testservice"
 label = "role"
 attributes = ["ui:user", "ui:admin"]
 
+[[entity-attribute-binding]]
+eid = "7d8b18fa5836487592a43eacea830b47"
+attributes = ["role/ui:user"]
+
 [[resource-property]]
 service = "testservice"
 label = "name"
