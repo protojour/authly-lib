@@ -63,11 +63,13 @@ struct ClientInner {
 impl Client {
     /// Construct a new builder.
     pub fn builder() -> ClientBuilder {
+        let url = std::env::var("AUTHLY_URL").unwrap_or("https://authly".to_string());
+
         ClientBuilder {
             authly_local_ca: None,
             identity: None,
             jwt_decoding_key: None,
-            url: Cow::Borrowed("https://authly"),
+            url: url.into(),
         }
     }
 
