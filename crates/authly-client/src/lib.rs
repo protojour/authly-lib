@@ -33,8 +33,14 @@ pub mod access_control;
 mod builder;
 mod error;
 
+/// File path for the local CA certificate.
+const LOCAL_CA_CERT_PATH: &str = "/etc/authly/local/ca.crt";
+
+/// File path for the local CA certificate.
+const IDENTITY_PATH: &str = "/etc/authly/identity/identity.pem";
+
 /// File path for detecting a valid kubernetes environment.
-const K8S_SA_TOKENFILE: &str = "/var/run/secrets/kubernetes.io/serviceaccount/token";
+const K8S_SA_TOKENFILE_PATH: &str = "/var/run/secrets/kubernetes.io/serviceaccount/token";
 
 /// The authly client handle.
 #[derive(Clone)]

@@ -7,7 +7,8 @@ use pem::{EncodeConfig, Pem};
 use rcgen::KeyPair;
 
 use crate::{
-    access_control, error, identity::Identity, Client, ClientInner, Error, K8S_SA_TOKENFILE,
+    access_control, error, identity::Identity, Client, ClientInner, Error, IDENTITY_PATH,
+    K8S_SA_TOKENFILE_PATH, LOCAL_CA_CERT_PATH,
 };
 
 /// A builder for configuring a [Client].
@@ -21,12 +22,22 @@ pub struct ClientBuilder {
 impl ClientBuilder {
     /// Infer the Authly client from the environment it runs in.
     pub async fn from_environment(mut self) -> Result<Self, Error> {
-        let key_pair = KeyPair::generate().map_err(|_err| Error::PrivateKeyGen)?;
+        let authly_local_ca =
+            std::fs::read(LOCAL_CA_CERT_PATH).map_err(|_| Error::AuthlyCA("not mounted"))?;
+        self.jwt_decoding_key = Some(jwt_decoding_key_from_cert(&authly_local_ca)?);
 
-        if std::fs::exists(K8S_SA_TOKENFILE).unwrap_or(false) {
-            let token = std::fs::read_to_string(K8S_SA_TOKENFILE).map_err(error::unclassified)?;
-            let authly_local_ca = std::fs::read("/etc/authly/local/ca.crt")
-                .map_err(|_| Error::AuthlyCA("not mounted"))?;
+        if std::fs::exists(IDENTITY_PATH).unwrap_or(false) {
+            self.authly_local_ca = Some(authly_local_ca);
+            self.identity = Some(
+                Identity::from_pem(std::fs::read(IDENTITY_PATH).unwrap())
+                    .map_err(|_| Error::Identity("invalid identity"))?,
+            );
+
+            Ok(self)
+        } else if std::fs::exists(K8S_SA_TOKENFILE_PATH).unwrap_or(false) {
+            let key_pair = KeyPair::generate().map_err(|_err| Error::PrivateKeyGen)?;
+            let token =
+                std::fs::read_to_string(K8S_SA_TOKENFILE_PATH).map_err(error::unclassified)?;
 
             let client_cert = reqwest::ClientBuilder::new()
                 .add_root_certificate(
@@ -51,7 +62,6 @@ impl ClientBuilder {
                 EncodeConfig::new().set_line_ending(pem::LineEnding::LF),
             );
 
-            self.jwt_decoding_key = Some(jwt_decoding_key_from_cert(&authly_local_ca)?);
             self.authly_local_ca = Some(authly_local_ca);
             self.identity = Some(Identity {
                 cert_pem: client_cert_pem.into_bytes(),
