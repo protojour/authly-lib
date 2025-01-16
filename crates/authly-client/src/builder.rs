@@ -25,7 +25,7 @@ impl ClientBuilder {
 
         if std::fs::exists(K8S_SA_TOKENFILE).unwrap_or(false) {
             let token = std::fs::read_to_string(K8S_SA_TOKENFILE).map_err(error::unclassified)?;
-            let authly_local_ca = std::fs::read("/etc/authly/local-ca.crt")
+            let authly_local_ca = std::fs::read("/etc/authly/local/ca.crt")
                 .map_err(|_| Error::AuthlyCA("not mounted"))?;
 
             let client_cert = reqwest::ClientBuilder::new()
