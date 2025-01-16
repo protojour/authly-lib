@@ -47,7 +47,7 @@ impl ClientBuilder {
                 .await
                 .map_err(error::unclassified)?;
             let client_cert_pem = pem::encode_config(
-                &Pem::new("CERTIFICATE", client_cert.to_vec()),
+                &Pem::new("CERTIFICATE", client_cert),
                 EncodeConfig::new().set_line_ending(pem::LineEnding::LF),
             );
 
@@ -83,6 +83,26 @@ impl ClientBuilder {
         self
     }
 
+    /// Get the current Authly local CA of the builder as a PEM-encoded byte buffer.
+    pub fn get_local_ca_pem(&self) -> Result<Cow<[u8]>, Error> {
+        self.authly_local_ca
+            .as_ref()
+            .map(|ca| Cow::Borrowed(ca.as_slice()))
+            .ok_or_else(|| Error::AuthlyCA("not provideded"))
+    }
+
+    /// Get the current Authly identity of the builder as a PEM-encoded byte buffer.
+    pub fn get_identity_pem(&self) -> Result<Cow<[u8]>, Error> {
+        let identity = self
+            .identity
+            .as_ref()
+            .ok_or_else(|| Error::Identity("not provided"))?;
+
+        let mut identity_pem = identity.cert_pem.clone();
+        identity_pem.extend(&identity.key_pem);
+        Ok(Cow::Owned(identity_pem))
+    }
+
     /// Connect to Authly
     pub async fn connect(self) -> Result<Client, Error> {
         let authly_local_ca = self
@@ -96,7 +116,7 @@ impl ClientBuilder {
             .ok_or_else(|| Error::Identity("not provided"))?;
 
         let tls_config = tonic::transport::ClientTlsConfig::new()
-            .ca_certificate(tonic::transport::Certificate::from_pem(authly_local_ca))
+            .ca_certificate(tonic::transport::Certificate::from_pem(&authly_local_ca))
             .identity(tonic::transport::Identity::from_pem(
                 identity.cert_pem,
                 identity.key_pem,

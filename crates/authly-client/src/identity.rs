@@ -1,3 +1,5 @@
+use pem::{EncodeConfig, Pem};
+
 use crate::Error;
 
 /// Client identitity.
@@ -9,21 +11,48 @@ pub struct Identity {
 }
 
 impl Identity {
-    /// Load identity from PEM file containing a certificate and private key
-    pub fn from_multi_pem(pem: impl AsRef<[u8]>) -> Result<Self, Error> {
-        let mut identity_pems = pem::parse_many(pem)
-            .map_err(|_| Error::Identity("invalid pem format"))?
-            .into_iter();
-        let cert = identity_pems
-            .next()
-            .ok_or_else(|| Error::Identity("pem: missing certificate"))?;
-        let key = identity_pems
-            .next()
-            .ok_or_else(|| Error::Identity("pem: missing private key"))?;
+    /// Load identity from PEM file containing a certificate and private key.
+    pub fn from_pem(pem: impl AsRef<[u8]>) -> Result<Self, Error> {
+        use rustls_pemfile::Item;
+        use std::io::Cursor;
+
+        let mut pem = Cursor::new(pem);
+        let mut certs = Vec::<rustls_pki_types::CertificateDer>::new();
+        let mut keys = Vec::<rustls_pki_types::PrivateKeyDer>::new();
+
+        for result in rustls_pemfile::read_all(&mut pem) {
+            match result {
+                Ok(Item::X509Certificate(cert)) => certs.push(cert),
+                Ok(Item::Pkcs1Key(key)) => keys.push(key.into()),
+                Ok(Item::Pkcs8Key(key)) => keys.push(key.into()),
+                Ok(Item::Sec1Key(key)) => keys.push(key.into()),
+                Ok(_) => {
+                    return Err(Error::Identity("No valid certificate was found"));
+                }
+                Err(_) => {
+                    return Err(Error::Identity("Invalid identity PEM file"));
+                }
+            }
+        }
+
+        let Some(cert) = certs.into_iter().next() else {
+            return Err(Error::Identity("Certificate not found"));
+        };
+        let Some(key) = keys.into_iter().next() else {
+            return Err(Error::Identity("Private key not found"));
+        };
 
         Ok(Self {
-            cert_pem: pem::encode(&cert).into_bytes(),
-            key_pem: pem::encode(&key).into_bytes(),
+            cert_pem: pem::encode_config(
+                &Pem::new("CERTIFICATE", cert.to_vec()),
+                EncodeConfig::new().set_line_ending(pem::LineEnding::LF),
+            )
+            .into_bytes(),
+            key_pem: pem::encode_config(
+                &Pem::new("PRIVATE KEY", key.secret_der()),
+                EncodeConfig::new().set_line_ending(pem::LineEnding::LF),
+            )
+            .into_bytes(),
         })
     }
 }
