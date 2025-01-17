@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub use authly_common::service::PropertyMapping;
 pub use builder::ClientBuilder;
 pub use error::Error;
 pub use token::AccessToken;
@@ -17,7 +18,6 @@ use authly_common::{
     access_token::AuthlyAccessTokenClaims,
     id::Eid,
     proto::service::{self as proto, authly_service_client::AuthlyServiceClient},
-    service::PropertyMapping,
 };
 use http::header::COOKIE;
 use tonic::Request;
@@ -100,6 +100,11 @@ impl Client {
     /// Make a new access control request, returning a builder for building it.
     pub fn access_control_request(&self) -> AccessControlRequestBuilder<'_> {
         AccessControlRequestBuilder::new(self)
+    }
+
+    /// Get the current resource properties of this service, in the form of a [PropertyMapping].
+    pub fn get_resource_property_mapping(&self) -> Arc<PropertyMapping> {
+        self.inner.resource_property_mapping.load_full()
     }
 
     /// Decode and validate an Authly [AccessToken].

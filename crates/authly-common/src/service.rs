@@ -7,13 +7,13 @@ use fnv::FnvHashSet;
 use crate::id::{AnyId, ObjId};
 
 /// A property mapping maps human-readable property and attribute labels to [ObjId]s.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct PropertyMapping {
     properties: HashMap<String, AttributeMappings>,
 }
 
 /// Attribute mappings for a property.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct AttributeMappings {
     attributes: HashMap<String, ObjId>,
 }
@@ -68,11 +68,29 @@ impl IntoIterator for PropertyMapping {
     }
 }
 
+impl<'a> IntoIterator for &'a PropertyMapping {
+    type IntoIter = hash_map::Iter<'a, String, AttributeMappings>;
+    type Item = (&'a String, &'a AttributeMappings);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.properties.iter()
+    }
+}
+
 impl IntoIterator for AttributeMappings {
     type IntoIter = hash_map::IntoIter<String, ObjId>;
     type Item = (String, ObjId);
 
     fn into_iter(self) -> Self::IntoIter {
         self.attributes.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a AttributeMappings {
+    type IntoIter = hash_map::Iter<'a, String, ObjId>;
+    type Item = (&'a String, &'a ObjId);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.attributes.iter()
     }
 }
