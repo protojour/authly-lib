@@ -3,6 +3,10 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub use builder::ClientBuilder;
+pub use error::Error;
+pub use token::AccessToken;
+
 use access_control::AccessControlRequestBuilder;
 use arc_swap::ArcSwap;
 
@@ -16,11 +20,7 @@ use authly_common::{
     service::PropertyMapping,
 };
 use http::header::COOKIE;
-use token::AccessToken;
 use tonic::Request;
-
-pub use builder::ClientBuilder;
-pub use error::Error;
 
 /// Client identity.
 pub mod identity;
@@ -102,6 +102,27 @@ impl Client {
         AccessControlRequestBuilder::new(self)
     }
 
+    /// Decode and validate an Authly [AccessToken].
+    /// The access token usually represents an entity which is a user of the system.
+    pub fn decode_access_token(
+        &self,
+        access_token: impl Into<String>,
+    ) -> Result<Arc<AccessToken>, Error> {
+        let access_token = access_token.into();
+        let validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::ES256);
+        let token_data = jsonwebtoken::decode::<AuthlyAccessTokenClaims>(
+            &access_token,
+            &self.inner.jwt_decoding_key,
+            &validation,
+        )
+        .map_err(|err| Error::InvalidAccessToken(err.into()))?;
+
+        Ok(Arc::new(AccessToken {
+            token: access_token,
+            claims: token_data.claims,
+        }))
+    }
+
     /// Exchange a session token for an access token suitable for evaluating access control.
     pub async fn get_access_token(&self, session_token: &str) -> Result<Arc<AccessToken>, Error> {
         let mut service = self.inner.service.clone();
@@ -121,18 +142,7 @@ impl Client {
             .map_err(error::tonic)?
             .into_inner();
 
-        let validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::ES256);
-        let token_data = jsonwebtoken::decode::<AuthlyAccessTokenClaims>(
-            &proto.token,
-            &self.inner.jwt_decoding_key,
-            &validation,
-        )
-        .map_err(|err| Error::InvalidAccessToken(err.into()))?;
-
-        Ok(Arc::new(AccessToken {
-            token: proto.token,
-            claims: token_data.claims,
-        }))
+        self.decode_access_token(proto.token)
     }
 }
 
