@@ -6,7 +6,7 @@
 use access_control::AccessControlRequestBuilder;
 use arc_swap::ArcSwap;
 
-use std::{borrow::Cow, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use authly_common::{

@@ -23,7 +23,7 @@ impl ClientBuilder {
     /// Infer the Authly client from the environment it runs in.
     pub async fn from_environment(mut self) -> Result<Self, Error> {
         let authly_local_ca =
-            std::fs::read(LOCAL_CA_CERT_PATH).map_err(|_| Error::AuthlyCA("not mounted"))?;
+            std::fs::read(LOCAL_CA_CERT_PATH).map_err(|_| Error::AuthlyCAmissingInEtc)?;
         self.jwt_decoding_key = Some(jwt_decoding_key_from_cert(&authly_local_ca)?);
 
         if std::fs::exists(IDENTITY_PATH).unwrap_or(false) {
@@ -98,7 +98,7 @@ impl ClientBuilder {
         self.authly_local_ca
             .as_ref()
             .map(|ca| Cow::Borrowed(ca.as_slice()))
-            .ok_or_else(|| Error::AuthlyCA("not provideded"))
+            .ok_or_else(|| Error::AuthlyCA("unconfigured"))
     }
 
     /// Get the current Authly identity of the builder as a PEM-encoded byte buffer.
@@ -106,7 +106,7 @@ impl ClientBuilder {
         let identity = self
             .identity
             .as_ref()
-            .ok_or_else(|| Error::Identity("not provided"))?;
+            .ok_or_else(|| Error::Identity("unconfigured"))?;
 
         let mut identity_pem = identity.cert_pem.clone();
         identity_pem.extend(&identity.key_pem);
@@ -117,13 +117,13 @@ impl ClientBuilder {
     pub async fn connect(self) -> Result<Client, Error> {
         let authly_local_ca = self
             .authly_local_ca
-            .ok_or_else(|| Error::AuthlyCA("not provided"))?;
+            .ok_or_else(|| Error::AuthlyCA("unconfigured"))?;
         let jwt_decoding_key = self
             .jwt_decoding_key
-            .ok_or_else(|| Error::AuthlyCA("missing public key"))?;
+            .ok_or_else(|| Error::AuthlyCA("public key not found"))?;
         let identity = self
             .identity
-            .ok_or_else(|| Error::Identity("not provided"))?;
+            .ok_or_else(|| Error::Identity("unconfigured"))?;
 
         let tls_config = tonic::transport::ClientTlsConfig::new()
             .ca_certificate(tonic::transport::Certificate::from_pem(&authly_local_ca))

@@ -1,9 +1,16 @@
+use crate::{IDENTITY_PATH, K8S_SA_TOKENFILE_PATH, LOCAL_CA_CERT_PATH};
+
 /// Errors that can happen either during client configuration or while communicating over the network.
 #[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// Error generating a private key.
     #[error("private key gen error")]
     PrivateKeyGen,
+
+    /// AuthlyCA not inferred from standard location
+    #[error("Authly CA does not exist at {LOCAL_CA_CERT_PATH}")]
+    AuthlyCAmissingInEtc,
 
     /// A problem with the Authly Certificate Authority.
     #[error("Authly CA error: {0}")]
@@ -14,7 +21,9 @@ pub enum Error {
     Identity(&'static str),
 
     /// Automatic environment inference did not work.
-    #[error("environment not inferrable")]
+    #[error(
+        "environment not inferrable: Neither {IDENTITY_PATH} or {K8S_SA_TOKENFILE_PATH} exists"
+    )]
     EnvironmentNotInferrable,
 
     /// A party was not authenticated or an operation was forbidden.
