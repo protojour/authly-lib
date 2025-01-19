@@ -38,7 +38,7 @@ tonic = { version = "0.12", default-features = false, features = [
     "codegen",
     "channel",
 ] }
-tower-server = { version = "0.2.3", optional = true }
+tower-server = { git = "https://github.com/audunhalland/tower-server.git", branch = "v03", optional = true }
 tracing = "0.1"
 unsigned-varint = "0.8"
 uuid = { version = "1", features = ["serde", "v4"], optional = true }
