@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for `AUTHLY_URL` environment variable.
 - Method for decoding and verifying access token.
 - Method for getting the current resource property mapping.
+- Method for generating signed certificate and key pair for Authly mesh servers.
 
 ### Fixed
 - Potention bug with order in identity PEMfile.

@@ -91,7 +91,7 @@ impl<'c> AccessControlRequestBuilder<'c> {
     ///
     /// The return value represents whether access was granted.
     pub async fn send(self) -> Result<bool, Error> {
-        let mut service = self.client.inner.service.clone();
+        let mut service = self.client.inner.authly_service.clone();
         let mut request = Request::new(proto::AccessControlRequest {
             resource_attributes: self
                 .resource_attributes

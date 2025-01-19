@@ -6,6 +6,8 @@
 pub use authly_common::service::PropertyMapping;
 pub use builder::ClientBuilder;
 pub use error::Error;
+use rcgen::{CertificateParams, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose};
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 pub use token::AccessToken;
 
 use access_control::AccessControlRequestBuilder;
@@ -50,7 +52,7 @@ pub struct Client {
 
 /// Shared data for cloned clients
 struct ClientInner {
-    service: AuthlyServiceClient<tonic::transport::Channel>,
+    authly_service: AuthlyServiceClient<tonic::transport::Channel>,
     jwt_decoding_key: jsonwebtoken::DecodingKey,
 
     /// The resource property mapping for this service.
@@ -75,7 +77,7 @@ impl Client {
 
     /// The eid of this client.
     pub async fn entity_id(&self) -> Result<Eid, Error> {
-        let mut service = self.inner.service.clone();
+        let mut service = self.inner.authly_service.clone();
         let metadata = service
             .get_metadata(proto::Empty::default())
             .await
@@ -87,7 +89,7 @@ impl Client {
 
     /// The name of this client.
     pub async fn label(&self) -> Result<String, Error> {
-        let mut service = self.inner.service.clone();
+        let mut service = self.inner.authly_service.clone();
         let metadata = service
             .get_metadata(proto::Empty::default())
             .await
@@ -130,7 +132,7 @@ impl Client {
 
     /// Exchange a session token for an access token suitable for evaluating access control.
     pub async fn get_access_token(&self, session_token: &str) -> Result<Arc<AccessToken>, Error> {
-        let mut service = self.inner.service.clone();
+        let mut service = self.inner.authly_service.clone();
         let mut request = Request::new(proto::Empty::default());
 
         // TODO: This should use Authorization instead of Cookie?
@@ -148,6 +150,64 @@ impl Client {
             .into_inner();
 
         self.decode_access_token(proto.token)
+    }
+
+    /// Generate a server certificate and a key pair for the service.
+    ///
+    /// This involves sending a Certificate Signing Request for Authly to resolve.
+    ///
+    /// Returns a pair of Certificate signed by the Authly Local CA, and the matching private key to be used by the server.
+    pub async fn generate_server_tls_params(
+        &self,
+        common_name: &str,
+    ) -> Result<(CertificateDer<'static>, PrivateKeyDer<'static>), Error> {
+        let params = {
+            let mut params = CertificateParams::new(vec![common_name.to_string()])
+                .map_err(|_| Error::InvalidCommonName)?;
+            params
+                .distinguished_name
+                .push(DnType::CommonName, common_name);
+            params.use_authority_key_identifier_extension = false;
+            params.key_usages.push(KeyUsagePurpose::DigitalSignature);
+            params
+                .extended_key_usages
+                .push(ExtendedKeyUsagePurpose::ServerAuth);
+
+            let now = time::OffsetDateTime::now_utc();
+            params.not_before = now;
+
+            // A default timeout that is one year.
+            // FIXME(rotation) What happens to the server after the certificate expires?
+            // No other services would then be able to connect to it, but it wouldn't itself understand that it's broken.
+            params.not_after = now.checked_add(time::Duration::days(365)).unwrap();
+            params
+        };
+
+        // The key pair to use for the server, and signing the Certificate Signing Request.
+        // The private key is not sent to Authly.
+        let key_pair = KeyPair::generate().map_err(|_err| Error::PrivateKeyGen)?;
+        let csr_der = params
+            .serialize_request(&key_pair)
+            .expect("the parameters should be correct")
+            .der()
+            .to_vec();
+
+        let proto = self
+            .inner
+            .authly_service
+            .clone()
+            .sign_certificate(Request::new(proto::CertificateSigningRequest {
+                der: csr_der,
+            }))
+            .await
+            .map_err(error::tonic)?;
+
+        let certificate = CertificateDer::from(proto.into_inner().der);
+        let private_key = PrivateKeyDer::try_from(key_pair.serialize_der()).map_err(|err| {
+            Error::Unclassified(anyhow!("could not serialize private key: {err}"))
+        })?;
+
+        Ok((certificate, private_key))
     }
 }
 

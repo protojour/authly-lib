@@ -15,6 +15,9 @@ service AuthlyService {
     // Perform remote access control.
     // A valid access token must be passed in an Authorization bearer.
     rpc AccessControl (AccessControlRequest) returns (AccessControlResponse);
+
+    // Make Authly sign the given certificate signing request using the local CA.
+    rpc SignCertificate (CertificateSigningRequest) returns (Certificate);
 }
 
 // Metadata about the service.
@@ -84,6 +87,18 @@ enum AccessControlOutcome {
 message AccessControlResponse {
     // The outcome of the access control evaluation.
     AccessControlOutcome outcome = 1;
+}
+
+// An X509 certificate signing request.
+message CertificateSigningRequest {
+    // The DER encoding of the certificate signing request.
+    bytes der = 1;
+}
+
+// An X509 certificate.
+message Certificate {
+    // The DER encoding of the certificate.
+    bytes der = 1;
 }
 
 // Represents no information being sent.

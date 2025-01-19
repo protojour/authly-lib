@@ -145,7 +145,7 @@ impl ClientBuilder {
 
         Ok(Client {
             inner: Arc::new(ClientInner {
-                service,
+                authly_service: service,
                 jwt_decoding_key,
                 resource_property_mapping: Arc::new(ArcSwap::new(resource_property_mapping)),
             }),

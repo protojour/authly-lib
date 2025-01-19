@@ -26,6 +26,10 @@ pub enum Error {
     )]
     EnvironmentNotInferrable,
 
+    /// Invalid Common Name in certificate signing request.
+    #[error("invalid X509 common name")]
+    InvalidCommonName,
+
     /// A party was not authenticated or an operation was forbidden.
     #[error("unauthorized: {0}")]
     Unauthorized(anyhow::Error),
