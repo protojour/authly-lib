@@ -19,6 +19,9 @@ pub mod access_token;
 #[cfg(feature = "document")]
 pub mod document;
 
+#[cfg(feature = "mtls_server")]
+pub mod mtls_server;
+
 pub mod policy;
 
 #[derive(Default)]
