@@ -1,5 +1,7 @@
 //! Authly document type definitions.
 
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 use toml::Spanned;
 use uuid::Uuid;
@@ -11,8 +13,13 @@ use crate::{id::Eid, property::QualifiedAttributeName};
 #[serde(deny_unknown_fields)]
 #[allow(missing_docs)]
 pub struct Document {
+    /// Metadata about the document
     #[serde(rename = "authly-document")]
     pub authly_document: AuthlyDocument,
+
+    /// Collection of settings for the local authly cluster
+    #[serde(default, rename = "local-settings")]
+    pub local_settings: Option<BTreeMap<Spanned<String>, Spanned<String>>>,
 
     #[serde(default)]
     pub entity: Vec<Entity>,

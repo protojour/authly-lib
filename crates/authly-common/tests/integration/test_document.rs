@@ -84,6 +84,15 @@ attributes = ["ontology:action/deploy"]
 policies = ["allow for main service", "allow for UI admin"]
 "#;
 
+const SETTINGS: &str = r#"
+[authly-document]
+id = "d783648f-e6ac-4492-87f7-43d5e5805d60"
+
+[local-settings]
+KEY0 = "value0"
+KEY1 = "value1"
+"#;
+
 #[test]
 fn test_entity() {
     let toml = ENTITY;
@@ -103,4 +112,16 @@ fn test_entity() {
 fn testservice_example() {
     let toml = SVC;
     Document::from_toml(toml).unwrap();
+}
+
+#[test]
+fn settings_example() {
+    let toml = SETTINGS;
+    let document = Document::from_toml(toml).unwrap();
+    let settings = document.local_settings.into_iter().next().unwrap();
+
+    let (key0, value0) = settings.into_iter().next().unwrap();
+
+    assert_eq!(&toml[key0.span()], "KEY0");
+    assert_eq!(&toml[value0.span()], "\"value0\"");
 }
