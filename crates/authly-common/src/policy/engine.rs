@@ -203,12 +203,14 @@ impl PolicyEngine {
 }
 
 fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<Outcome, EvalError> {
-    // println!("eval policy");
+    #[cfg(feature = "policy_debug")]
+    tracing::info!("eval_policy");
 
     let mut stack: Vec<StackItem> = Vec::with_capacity(16);
 
     while let Some(code) = pc.first() {
-        // println!("    stack {stack:?}");
+        #[cfg(feature = "policy_debug")]
+        tracing::info!("    stack {stack:?}");
 
         pc = &pc[1..];
 
@@ -216,7 +218,8 @@ fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<Outcome, E
             return Err(EvalError::Program);
         };
 
-        // println!("  eval code {code:?}");
+        #[cfg(feature = "policy_debug")]
+        tracing::info!("  eval code {code:?}");
 
         match code {
             Bytecode::LoadSubjectId => {

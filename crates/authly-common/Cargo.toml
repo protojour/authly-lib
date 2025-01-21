@@ -16,6 +16,7 @@ access_token = []
 document = ["dep:serde_spanned", "dep:toml", "dep:uuid"]
 mtls_server = ["dep:http", "dep:hyper", "dep:rustls", "dep:tower-server", "dep:x509-parser"]
 tonic_server = ["tonic/transport"]
+policy_debug = []
 unstable-doc-cfg = []
 
 [dependencies]
