@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Changed
 - Standard path of Authly CA is now /etc/authly/local/ca.crt.
+- Kubernetes authentication URL is now https://authly-k8s/api/v0/authenticate.
 
 ### Added
 - Support for inferring identity from /etc/authly/identity/identity.pem.

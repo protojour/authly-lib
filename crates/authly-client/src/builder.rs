@@ -46,9 +46,9 @@ impl ClientBuilder {
                 )
                 .build()
                 .map_err(error::unclassified)?
-                .post("https://authly-k8s/api/csr")
-                .body(key_pair.public_key_der())
+                .post("https://authly-k8s/api/v0/authenticate")
                 .header(AUTHORIZATION, format!("Bearer {token}"))
+                .body(key_pair.public_key_der())
                 .send()
                 .await
                 .map_err(error::unauthorized)?
