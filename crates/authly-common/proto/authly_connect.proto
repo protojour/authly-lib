@@ -3,8 +3,13 @@ package authly_connect;
 
 // Authly Connect protocol
 service AuthlyConnect {
-    // Make a tunnel to the Authly instance.
-    rpc Tunnel (stream Frame) returns (stream Frame);
+    // Make a secure tunnel to the Authly instance.
+    // This tunnel mode does not try to verify client identity.
+    rpc Secure (stream Frame) returns (stream Frame);
+
+    // Make a mutually secure tunnel to the Authly instance.
+    // The client must verify its identity with a signed certificate.
+    rpc MutuallySecure (stream Frame) returns (stream Frame);
 }
 
 // A frame sent over the connection.
