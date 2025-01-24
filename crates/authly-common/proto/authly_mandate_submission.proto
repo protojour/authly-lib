@@ -1,0 +1,27 @@
+syntax = "proto3";
+package authly_mandate_submission;
+
+// Authly Mandate Submission protocol.
+//
+// It is serviced through a Secure (not MutuallySecure) Authly Connection tunnel.
+service AuthlyMandateSubmission {
+    rpc Submit (SubmissionRequest) returns (SubmissionResponse);
+}
+
+// Submission request from Mandate to Authority.
+message SubmissionRequest {
+    // Submission token.
+    string token = 1;
+
+    // A DER encoded certificate signing request for the mandate's identity.
+    bytes identity_csr_der = 2;
+}
+
+// Response from Authority to Mandate after submission.
+message SubmissionResponse {
+    // The certificate authority representing the authority.
+    bytes authority_ca = 1;
+
+    // The certified identity of the mandate.
+    bytes mandate_identity_cert_der = 2;
+}
