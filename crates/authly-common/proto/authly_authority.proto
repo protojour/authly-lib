@@ -1,0 +1,35 @@
+syntax = "proto3";
+package authly_authority;
+
+// The Authly authority model:
+//
+// The server is called the _authority_.
+// The client is called the _mandate_.
+service AuthlyAuthority {
+    // Fetch the contract the authority hands to the mandate.
+    rpc GetMandateContract (Empty) returns (MandateContract);
+}
+
+// The manifest that the authority exports
+message MandateContract {
+    // The entity ID of the authority.
+    bytes authority_entity_id = 1;
+
+    // The X509 Certificate Authority in DER format
+    bytes authority_certificate = 2;
+
+    // What is granted by the authority to the mandate
+    repeated MandateGrant mandate_grants = 3;
+}
+
+// Specific kinds of mandate grants
+enum MandateGrant {
+    SUBJECT = 0;
+    AUTONOMOUS = 1;
+    SOVEREIGN = 2;
+    SUPREME = 3;
+    LOCAL_POPULATION = 4;
+}
+
+// Represents no information being sent.
+message Empty {}
