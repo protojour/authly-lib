@@ -1,0 +1,14 @@
+syntax = "proto3";
+package authly_connect;
+
+// Authly Connect protocol
+service AuthlyConnect {
+    // Make a tunnel to the Authly instance.
+    rpc Tunnel (stream Frame) returns (stream Frame);
+}
+
+// A frame sent over the connection.
+message Frame {
+    // The byte buffer contained in this Frame's payload.
+    bytes payload = 1;
+}
