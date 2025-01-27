@@ -1,6 +1,6 @@
 [package]
 name = "authly-client"
-version = "0.0.3"
+version = "0.0.4"
 description = "A Rust client for Authly"
 keywords = ["authly", "auth", "authority", "iam", "service-mesh"]
 categories = ["authentication", "cryptography"]
@@ -12,7 +12,7 @@ rust-version.workspace = true
 publish = true
 
 [dependencies]
-authly-common = { path = "../authly-common", version = "0.0.3", features = ["access_token"] }
+authly-common = { path = "../authly-common", version = "0.0.4", features = ["access_token"] }
 arc-swap = "1"
 anyhow = "1"
 fnv = "1"
