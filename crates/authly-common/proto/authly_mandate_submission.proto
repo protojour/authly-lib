@@ -19,9 +19,22 @@ message SubmissionRequest {
 
 // Response from Authority to Mandate after submission.
 message SubmissionResponse {
-    // The certificate authority representing the authority.
-    bytes authority_ca = 1;
+    // The Entity ID assigned to the mandate.
+    bytes mandate_entity_id = 1;
 
-    // The certified identity of the mandate.
-    bytes mandate_identity_cert_der = 2;
+    // The certificate chain.
+    // The mandate's own freshly signed certificate is the first in the chain.
+    repeated AuthlyCertificate cert_chain = 2;
+}
+
+// An Authly Certificate
+message AuthlyCertificate {
+    // Which entity ID this is certifying
+    bytes certifies_entity_id = 1;
+
+    // Which entity ID signed the certificate
+    bytes signed_by_entity_id = 2;
+
+    // The DER encoded contents of the certificate
+    bytes der = 3;
 }
