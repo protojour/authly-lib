@@ -22,9 +22,12 @@ message SubmissionResponse {
     // The Entity ID assigned to the mandate.
     bytes mandate_entity_id = 1;
 
+    // The signed mandate identity certificate
+    AuthlyCertificate mandate_identity_cert = 2;
+
     // The certificate chain.
-    // The mandate's own freshly signed certificate is the first in the chain.
-    repeated AuthlyCertificate cert_chain = 2;
+    // The first certificate in the chain is the mandate's new local CA.
+    repeated AuthlyCertificate ca_chain = 3;
 }
 
 // An Authly Certificate
