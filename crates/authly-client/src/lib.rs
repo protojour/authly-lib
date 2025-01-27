@@ -35,8 +35,12 @@ pub mod access_control;
 mod builder;
 mod error;
 
+/// File path for the root CA certificate.
+#[expect(unused)]
+const ROOT_CA_CERT_PATH: &str = "/etc/authly/certs/root.crt";
+
 /// File path for the local CA certificate.
-const LOCAL_CA_CERT_PATH: &str = "/etc/authly/local/ca.crt";
+const LOCAL_CA_CERT_PATH: &str = "/etc/authly/certs/local.crt";
 
 /// File path for the local CA certificate.
 const IDENTITY_PATH: &str = "/etc/authly/identity/identity.pem";
