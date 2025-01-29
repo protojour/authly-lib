@@ -10,7 +10,6 @@ pub use builder::ClientBuilder;
 use builder::ConnectionParamsBuilder;
 use connection::{Connection, ConnectionParams, ReconfigureStrategy};
 pub use error::Error;
-use futures_util::stream::BoxStream;
 use rcgen::{CertificateParams, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose};
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 pub use token::AccessToken;
@@ -70,6 +69,7 @@ struct ClientState {
     reconfigure: ReconfigureStrategy,
 
     /// Triggered when the client gets reconfigured
+    #[allow(unused)]
     reconfigured_rx: tokio::sync::watch::Receiver<Arc<ConnectionParams>>,
 
     /// signal sent when the state is dropped
@@ -238,6 +238,7 @@ impl Client {
     }
 
     /// Return a stream of [rustls::ServerConfig] values for configuring authly-verified servers.
+    /// The first stream item will resolve immediately.
     ///
     /// For now, this only renews the server certificate when absolutely required.
     /// In the future, this may rotate server certificates automatically on a fixed (configurable) interval.
@@ -245,7 +246,7 @@ impl Client {
     pub async fn rustls_server_configurer(
         &self,
         common_name: impl Into<Cow<'static, str>>,
-    ) -> Result<BoxStream<'static, Arc<rustls::ServerConfig>>, Error> {
+    ) -> Result<futures_util::stream::BoxStream<'static, Arc<rustls::ServerConfig>>, Error> {
         use std::time::Duration;
 
         use futures_util::StreamExt;
@@ -314,6 +315,63 @@ impl Client {
                                 tracing::error!(
                                     ?err,
                                     "could not regenerate TLS server config, trying again soon"
+                                );
+                                tokio::time::sleep(Duration::from_secs(10)).await;
+                            }
+                        }
+                    }
+                }
+            });
+
+        Ok(immediate_stream.chain(rotation_stream).boxed())
+    }
+
+    /// Generates a stream of [reqwest::ClientBuilder] preconfigured with Authly TLS paramaters.
+    /// The first stream item will resolve immediately.
+    #[cfg(feature = "reqwest_012")]
+    pub async fn request_client_builder_stream(
+        &self,
+    ) -> Result<futures_util::stream::BoxStream<'static, reqwest::ClientBuilder>, Error> {
+        use std::time::Duration;
+
+        use futures_util::StreamExt;
+
+        fn rebuild(params: Arc<ConnectionParams>) -> Result<reqwest::ClientBuilder, Error> {
+            Ok(reqwest::Client::builder()
+                .add_root_certificate(
+                    reqwest::tls::Certificate::from_pem(&params.authly_local_ca)
+                        .map_err(|_| Error::AuthlyCA("unable to parse"))?,
+                )
+                .identity(
+                    reqwest::Identity::from_pem(params.identity.to_pem()?.as_ref())
+                        .map_err(|_| Error::Identity("unable to parse"))?,
+                ))
+        }
+
+        let mut reconfigured_rx = self.state.reconfigured_rx.clone();
+        let initial_params = reconfigured_rx.borrow_and_update().clone();
+
+        let initial_builder = rebuild(initial_params)?;
+        let immediate_stream = futures_util::stream::iter([initial_builder]);
+
+        let rotation_stream =
+            futures_util::stream::unfold(reconfigured_rx, move |mut reconfigured_rx| {
+                async move {
+                    // wait for configuration change
+                    let Ok(()) = reconfigured_rx.changed().await else {
+                        // client dropped
+                        return None;
+                    };
+
+                    loop {
+                        let params = reconfigured_rx.borrow_and_update().clone();
+
+                        match rebuild(params) {
+                            Ok(server_config) => return Some((server_config, reconfigured_rx)),
+                            Err(err) => {
+                                tracing::error!(
+                                    ?err,
+                                    "could not regenerate reqwest ClientBuilder, retrying soon"
                                 );
                                 tokio::time::sleep(Duration::from_secs(10)).await;
                             }

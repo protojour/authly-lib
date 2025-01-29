@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use pem::{EncodeConfig, Pem};
 
 use crate::Error;
@@ -55,5 +57,11 @@ impl Identity {
             )
             .into_bytes(),
         })
+    }
+
+    pub(crate) fn to_pem(&self) -> Result<Cow<[u8]>, Error> {
+        let mut identity_pem = self.cert_pem.clone();
+        identity_pem.extend(&self.key_pem);
+        Ok(Cow::Owned(identity_pem))
     }
 }

@@ -12,6 +12,7 @@ rust-version.workspace = true
 publish = true
 
 [features]
+reqwest_012 = []
 rustls_023 = ["dep:rustls"]
 
 [dependencies]

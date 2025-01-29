@@ -64,15 +64,11 @@ impl ClientBuilder {
 
     /// Get the current Authly identity of the builder as a PEM-encoded byte buffer.
     pub fn get_identity_pem(&self) -> Result<Cow<[u8]>, Error> {
-        let identity = self
-            .inner
+        self.inner
             .identity
             .as_ref()
-            .ok_or_else(|| Error::Identity("unconfigured"))?;
-
-        let mut identity_pem = identity.cert_pem.clone();
-        identity_pem.extend(&identity.key_pem);
-        Ok(Cow::Owned(identity_pem))
+            .ok_or_else(|| Error::Identity("unconfigured"))?
+            .to_pem()
     }
 
     /// Connect to Authly
