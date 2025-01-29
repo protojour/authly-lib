@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - mandate submission reponse type
 
+### Added
+- authly_service.proto: Add client messaging
+
 ## [0.0.4] - 2025-01-27
 ### Added
 - authly_connect and authly_mandate_submission services.
