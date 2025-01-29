@@ -240,6 +240,9 @@ impl Client {
     /// Return a stream of [rustls::ServerConfig] values for configuring authly-verified servers.
     /// The first stream item will resolve immediately.
     ///
+    /// The config comes with `h2` and `http/1.1` ALPN protocols.
+    /// This may become configurable in the future.
+    ///
     /// For now, this only renews the server certificate when absolutely required.
     /// In the future, this may rotate server certificates automatically on a fixed (configurable) interval.
     #[cfg(feature = "rustls_023")]
@@ -268,18 +271,17 @@ impl Client {
 
             let (cert, key) = client.generate_server_tls_params(&common_name).await?;
 
-            Ok(Arc::new(
-                rustls::server::ServerConfig::builder()
-                    .with_client_cert_verifier(
-                        WebPkiClientVerifier::builder(root_cert_store.into())
-                            .build()
-                            .map_err(|_| {
-                                Error::AuthlyCA("cannot build a WebPki client verifier")
-                            })?,
-                    )
-                    .with_single_cert(vec![cert], key)
-                    .map_err(|_| Error::Tls("Unable to configure server"))?,
-            ))
+            let mut tls_config = rustls::server::ServerConfig::builder()
+                .with_client_cert_verifier(
+                    WebPkiClientVerifier::builder(root_cert_store.into())
+                        .build()
+                        .map_err(|_| Error::AuthlyCA("cannot build a WebPki client verifier"))?,
+                )
+                .with_single_cert(vec![cert], key)
+                .map_err(|_| Error::Tls("Unable to configure server"))?;
+            tls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+
+            Ok(Arc::new(tls_config))
         }
 
         let client = self.clone();
