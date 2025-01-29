@@ -31,7 +31,7 @@ impl<'c> AccessControlRequestBuilder<'c> {
     pub(crate) fn new(client: &'c Client) -> Self {
         Self {
             client,
-            property_mapping: client.inner.resource_property_mapping.load_full(),
+            property_mapping: client.state.resource_property_mapping.load_full(),
             access_token: None,
             resource_attributes: Default::default(),
             peer_entity_ids: Default::default(),
@@ -91,7 +91,6 @@ impl<'c> AccessControlRequestBuilder<'c> {
     ///
     /// The return value represents whether access was granted.
     pub async fn send(self) -> Result<bool, Error> {
-        let mut service = self.client.inner.authly_service.clone();
         let mut request = Request::new(proto::AccessControlRequest {
             resource_attributes: self
                 .resource_attributes
@@ -115,7 +114,9 @@ impl<'c> AccessControlRequestBuilder<'c> {
             );
         }
 
-        let access_control_response = service
+        let access_control_response = self
+            .client
+            .current_service()
             .access_control(request)
             .await
             .map_err(error::tonic)?

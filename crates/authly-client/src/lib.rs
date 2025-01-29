@@ -1,10 +1,14 @@
 //! `authly-client` is an asynchronous Rust client handle for services interfacing with the authly service.
+//!
+//! At present, it only works with the `tokio` runtime.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 pub use authly_common::service::PropertyMapping;
 pub use builder::ClientBuilder;
+use builder::ConnectionParamsBuilder;
+use connection::{Connection, ReconfigureStrategy};
 pub use error::Error;
 use rcgen::{CertificateParams, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose};
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
@@ -13,7 +17,7 @@ pub use token::AccessToken;
 use access_control::AccessControlRequestBuilder;
 use arc_swap::ArcSwap;
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use anyhow::anyhow;
 use authly_common::{
@@ -22,7 +26,7 @@ use authly_common::{
     proto::service::{self as proto, authly_service_client::AuthlyServiceClient},
 };
 use http::header::COOKIE;
-use tonic::Request;
+use tonic::{transport::Channel, Request};
 
 /// Client identity.
 pub mod identity;
@@ -32,7 +36,9 @@ pub mod token;
 
 pub mod access_control;
 
+mod background_worker;
 mod builder;
+mod connection;
 mod error;
 
 /// File path for the root CA certificate.
@@ -51,38 +57,49 @@ const K8S_SA_TOKENFILE_PATH: &str = "/var/run/secrets/kubernetes.io/serviceaccou
 /// The authly client handle.
 #[derive(Clone)]
 pub struct Client {
-    inner: Arc<ClientInner>,
+    state: Arc<ClientState>,
 }
 
 /// Shared data for cloned clients
-struct ClientInner {
-    authly_service: AuthlyServiceClient<tonic::transport::Channel>,
-    jwt_decoding_key: jsonwebtoken::DecodingKey,
+struct ClientState {
+    /// The current connection
+    conn: ArcSwap<Connection>,
+
+    /// How to reconfigure the connection
+    reconfigure: ReconfigureStrategy,
+
+    /// signal sent when the state is dropped
+    closed_tx: tokio::sync::watch::Sender<()>,
 
     /// The resource property mapping for this service.
     /// It's kept in an ArcSwap to potentially support live-update of this structure.
     /// For that to work, the client should keep a subscription option and listen
     /// for change events and re-download the property mapping.
-    resource_property_mapping: Arc<ArcSwap<PropertyMapping>>,
+    resource_property_mapping: ArcSwap<PropertyMapping>,
+}
+
+impl Drop for ClientState {
+    fn drop(&mut self) {
+        let _ = self.closed_tx.send(());
+    }
 }
 
 impl Client {
     /// Construct a new builder.
     pub fn builder() -> ClientBuilder {
-        let url = std::env::var("AUTHLY_URL").unwrap_or("https://authly".to_string());
+        let url = std::env::var("AUTHLY_URL")
+            .map(Cow::Owned)
+            .unwrap_or(Cow::Borrowed("https://authly"));
 
         ClientBuilder {
-            authly_local_ca: None,
-            identity: None,
-            jwt_decoding_key: None,
-            url: url.into(),
+            inner: ConnectionParamsBuilder::new(url),
         }
     }
 
     /// The eid of this client.
     pub async fn entity_id(&self) -> Result<Eid, Error> {
-        let mut service = self.inner.authly_service.clone();
-        let metadata = service
+        let metadata = self
+            .current_service()
             .get_metadata(proto::Empty::default())
             .await
             .map_err(error::tonic)?
@@ -93,8 +110,8 @@ impl Client {
 
     /// The name of this client.
     pub async fn label(&self) -> Result<String, Error> {
-        let mut service = self.inner.authly_service.clone();
-        let metadata = service
+        let metadata = self
+            .current_service()
             .get_metadata(proto::Empty::default())
             .await
             .map_err(error::tonic)?
@@ -110,7 +127,7 @@ impl Client {
 
     /// Get the current resource properties of this service, in the form of a [PropertyMapping].
     pub fn get_resource_property_mapping(&self) -> Arc<PropertyMapping> {
-        self.inner.resource_property_mapping.load_full()
+        self.state.resource_property_mapping.load_full()
     }
 
     /// Decode and validate an Authly [AccessToken].
@@ -123,7 +140,7 @@ impl Client {
         let validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::ES256);
         let token_data = jsonwebtoken::decode::<AuthlyAccessTokenClaims>(
             &access_token,
-            &self.inner.jwt_decoding_key,
+            &self.state.conn.load().params.jwt_decoding_key,
             &validation,
         )
         .map_err(|err| Error::InvalidAccessToken(err.into()))?;
@@ -136,7 +153,6 @@ impl Client {
 
     /// Exchange a session token for an access token suitable for evaluating access control.
     pub async fn get_access_token(&self, session_token: &str) -> Result<Arc<AccessToken>, Error> {
-        let mut service = self.inner.authly_service.clone();
         let mut request = Request::new(proto::Empty::default());
 
         // TODO: This should use Authorization instead of Cookie?
@@ -147,7 +163,8 @@ impl Client {
                 .map_err(error::unclassified)?,
         );
 
-        let proto = service
+        let proto = self
+            .current_service()
             .get_access_token(request)
             .await
             .map_err(error::tonic)?
@@ -197,7 +214,9 @@ impl Client {
             .to_vec();
 
         let proto = self
-            .inner
+            .state
+            .conn
+            .load()
             .authly_service
             .clone()
             .sign_certificate(Request::new(proto::CertificateSigningRequest {
@@ -212,6 +231,13 @@ impl Client {
         })?;
 
         Ok((certificate, private_key))
+    }
+}
+
+/// Private methods
+impl Client {
+    fn current_service(&self) -> AuthlyServiceClient<Channel> {
+        self.state.conn.load().authly_service.clone()
     }
 }
 

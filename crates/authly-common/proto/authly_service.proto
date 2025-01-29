@@ -18,6 +18,8 @@ service AuthlyService {
 
     // Make Authly sign the given certificate signing request using the local CA.
     rpc SignCertificate (CertificateSigningRequest) returns (Certificate);
+
+    rpc Messages (Empty) returns (stream ServiceMessage);
 }
 
 // Metadata about the service.
@@ -99,6 +101,21 @@ message CertificateSigningRequest {
 message Certificate {
     // The DER encoding of the certificate.
     bytes der = 1;
+}
+
+// An asynchronous message to the service that it should respond to.
+message ServiceMessage {
+    // The kind of message.
+    oneof ServiceMessageKind {
+        // The service should reload all Authly-related configuration including certificates,
+        // close and then re-open Authly connection.
+        //
+        // The reason for this might be renewed certificates, that the client has been dismissed by Authly, or other reasons.
+        Empty reload_ca = 1;
+
+        // The service should reload all locally cached data received through this gRPC service.
+        Empty reload_cache = 2;
+    }
 }
 
 // Represents no information being sent.

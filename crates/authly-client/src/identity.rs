@@ -5,6 +5,7 @@ use crate::Error;
 /// Client identitity.
 ///
 /// All authly clients identifies themselves using mutual TLS.
+#[derive(Clone)]
 pub struct Identity {
     pub(crate) cert_pem: Vec<u8>,
     pub(crate) key_pem: Vec<u8>,
