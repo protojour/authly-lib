@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Added
 - Background worker with auto-reconnect and messaging system
+- rustls ServerConfig stream
 
 ## [0.0.4] - 2025-01-27
 ### Changed

@@ -8,8 +8,9 @@
 pub use authly_common::service::PropertyMapping;
 pub use builder::ClientBuilder;
 use builder::ConnectionParamsBuilder;
-use connection::{Connection, ReconfigureStrategy};
+use connection::{Connection, ConnectionParams, ReconfigureStrategy};
 pub use error::Error;
+use futures_util::stream::BoxStream;
 use rcgen::{CertificateParams, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose};
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 pub use token::AccessToken;
@@ -67,6 +68,9 @@ struct ClientState {
 
     /// How to reconfigure the connection
     reconfigure: ReconfigureStrategy,
+
+    /// Triggered when the client gets reconfigured
+    reconfigured_rx: tokio::sync::watch::Receiver<Arc<ConnectionParams>>,
 
     /// signal sent when the state is dropped
     closed_tx: tokio::sync::watch::Sender<()>,
@@ -231,6 +235,94 @@ impl Client {
         })?;
 
         Ok((certificate, private_key))
+    }
+
+    /// Return a stream of [rustls::ServerConfig] values for configuring authly-verified servers.
+    ///
+    /// For now, this only renews the server certificate when absolutely required.
+    /// In the future, this may rotate server certificates automatically on a fixed (configurable) interval.
+    #[cfg(feature = "rustls_023")]
+    pub async fn rustls_server_configurer(
+        &self,
+        common_name: impl Into<Cow<'static, str>>,
+    ) -> Result<BoxStream<'static, Arc<rustls::ServerConfig>>, Error> {
+        use std::time::Duration;
+
+        use futures_util::StreamExt;
+        use rustls::{server::WebPkiClientVerifier, RootCertStore};
+        use rustls_pki_types::pem::PemObject;
+
+        async fn rebuild_server_config(
+            client: Client,
+            params: Arc<ConnectionParams>,
+            common_name: Cow<'static, str>,
+        ) -> Result<Arc<rustls::ServerConfig>, Error> {
+            let mut root_cert_store = RootCertStore::empty();
+            root_cert_store
+                .add(
+                    CertificateDer::from_pem_slice(&params.authly_local_ca)
+                        .map_err(|_err| Error::AuthlyCA("unable to parse"))?,
+                )
+                .map_err(|_err| Error::AuthlyCA("unable to include in root cert store"))?;
+
+            let (cert, key) = client.generate_server_tls_params(&common_name).await?;
+
+            Ok(Arc::new(
+                rustls::server::ServerConfig::builder()
+                    .with_client_cert_verifier(
+                        WebPkiClientVerifier::builder(root_cert_store.into())
+                            .build()
+                            .map_err(|_| {
+                                Error::AuthlyCA("cannot build a WebPki client verifier")
+                            })?,
+                    )
+                    .with_single_cert(vec![cert], key)
+                    .map_err(|_| Error::Tls("Unable to configure server"))?,
+            ))
+        }
+
+        let client = self.clone();
+        let common_name = common_name.into();
+        let mut reconfigured_rx = self.state.reconfigured_rx.clone();
+        let initial_params = reconfigured_rx.borrow_and_update().clone();
+        let initial_tls_config =
+            rebuild_server_config(client.clone(), initial_params, common_name.clone()).await?;
+
+        let immediate_stream = futures_util::stream::iter([initial_tls_config]);
+
+        let rotation_stream =
+            futures_util::stream::unfold(reconfigured_rx, move |mut reconfigured_rx| {
+                let client = client.clone();
+                let common_name = common_name.clone();
+
+                async move {
+                    // wait for configuration change
+                    let Ok(()) = reconfigured_rx.changed().await else {
+                        // client dropped
+                        return None;
+                    };
+
+                    loop {
+                        let params = reconfigured_rx.borrow_and_update().clone();
+                        let server_config_result =
+                            rebuild_server_config(client.clone(), params, common_name.clone())
+                                .await;
+
+                        match server_config_result {
+                            Ok(server_config) => return Some((server_config, reconfigured_rx)),
+                            Err(err) => {
+                                tracing::error!(
+                                    ?err,
+                                    "could not regenerate TLS server config, trying again soon"
+                                );
+                                tokio::time::sleep(Duration::from_secs(10)).await;
+                            }
+                        }
+                    }
+                }
+            });
+
+        Ok(immediate_stream.chain(rotation_stream).boxed())
     }
 }
 

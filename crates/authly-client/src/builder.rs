@@ -79,6 +79,7 @@ impl ClientBuilder {
     pub async fn connect(self) -> Result<Client, Error> {
         let params = self.inner.try_into_connection_params()?;
         let connection = make_connection(params.clone()).await?;
+        let (reconfigured_tx, reconfigured_rx) = tokio::sync::watch::channel(params.clone());
 
         let reconfigure = match params.inference {
             Inference::Inferred => ReconfigureStrategy::ReInfer {
@@ -95,11 +96,12 @@ impl ClientBuilder {
         let state = Arc::new(ClientState {
             conn: ArcSwap::new(Arc::new(connection)),
             reconfigure,
+            reconfigured_rx,
             closed_tx,
             resource_property_mapping: ArcSwap::new(resource_property_mapping),
         });
 
-        spawn_background_worker(state.clone(), closed_rx).await?;
+        spawn_background_worker(state.clone(), reconfigured_tx, closed_rx).await?;
 
         let client = Client { state };
 
