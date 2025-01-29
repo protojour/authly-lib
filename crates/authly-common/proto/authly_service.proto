@@ -19,7 +19,11 @@ service AuthlyService {
     // Make Authly sign the given certificate signing request using the local CA.
     rpc SignCertificate (CertificateSigningRequest) returns (Certificate);
 
+    // Subscribe to Authly messages.
     rpc Messages (Empty) returns (stream ServiceMessage);
+
+    // Respond to a ping.
+    rpc Pong (Empty) returns (Empty);
 }
 
 // Metadata about the service.
@@ -115,6 +119,9 @@ message ServiceMessage {
 
         // The service should reload all locally cached data received through this gRPC service.
         Empty reload_cache = 2;
+
+        // Authly tries to ping the service and the service should respond with invoking the `Pong` rpc.
+        Empty ping = 3;
     }
 }
 

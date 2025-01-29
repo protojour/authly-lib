@@ -67,6 +67,15 @@ async fn handle_message_kind(
         proto::service_message::ServiceMessageKind::ReloadCache(_) => {
             reload_local_cache(state).await;
         }
+        proto::service_message::ServiceMessageKind::Ping(_) => {
+            let _result = state
+                .conn
+                .load()
+                .authly_service
+                .clone()
+                .pong(tonic::Request::new(proto::Empty {}))
+                .await;
+        }
     }
 }
 
