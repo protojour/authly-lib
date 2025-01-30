@@ -21,17 +21,17 @@ id = "bc9ce588-50c3-47d1-94c1-f88b21eaf299"
 [[service-entity]]
 eid = "2671d2a0bc3545e69fc666130254f8e9"
 label = "testservice"
-attributes = ["authly:role/authenticate", "authly:role/get_access_token"]
+attributes = ["authly:role:authenticate", "authly:role:get_access_token"]
 kubernetes-account = { name = "testservice", namespace = "authly-test" }
 
 [[entity-property]]
 service = "testservice"
 label = "role"
-attributes = ["ui:user", "ui:admin"]
+attributes = ["ui/user", "ui/admin"]
 
 [[entity-attribute-binding]]
 eid = "7d8b18fa5836487592a43eacea830b47"
-attributes = ["role/ui:user"]
+attributes = ["testservice:role:ui/user"]
 
 [[resource-property]]
 service = "testservice"
@@ -40,22 +40,22 @@ attributes = ["ontology", "storage"]
 
 [[resource-property]]
 service = "testservice"
-label = "ontology:action"
+label = "ontology/action"
 attributes = ["read", "deploy", "stop"]
 
 [[resource-property]]
 service = "testservice"
-label = "buckets:action"
+label = "buckets/action"
 attributes = ["read"]
 
 [[resource-property]]
 service = "testservice"
-label = "bucket:action"
+label = "bucket/action"
 attributes = ["read", "create", "delete"]
 
 [[resource-property]]
 service = "testservice"
-label = "object:action"
+label = "object/action"
 attributes = ["read", "create", "delete"]
 
 [[policy]]
@@ -66,21 +66,21 @@ allow = "Subject.entity == testservice"
 [[policy]]
 service = "testservice"
 label = "allow for UI user"
-allow = "Subject.role contains role/ui:user"
+allow = "Subject.testservice:role contains testservice:role:ui/user"
 
 [[policy]]
 service = "testservice"
 label = "allow for UI admin"
-allow = "Subject.role contains role/ui:admin"
+allow = "Subject.testservice:role contains testservice:role:ui/admin"
 
 [[policy-binding]]
 service = "testservice"
-attributes = ["ontology:action/read"]
+attributes = ["testservice:ontology/action:read"]
 policies = ["allow for main service", "allow for UI user"]
 
 [[policy-binding]]
 service = "testservice"
-attributes = ["ontology:action/deploy"]
+attributes = ["testservice:ontology/action:deploy"]
 policies = ["allow for main service", "allow for UI admin"]
 "#;
 

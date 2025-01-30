@@ -28,6 +28,12 @@ pub struct Document {
     pub service_entity: Vec<Entity>,
 
     #[serde(default)]
+    pub domain: Vec<Domain>,
+
+    #[serde(default, rename = "service-domain")]
+    pub service_domain: Vec<ServiceDomain>,
+
+    #[serde(default)]
     pub email: Vec<Email>,
 
     #[serde(default, rename = "password-hash")]
@@ -90,6 +96,25 @@ pub struct Entity {
     /// An optional kubernetes account.
     #[serde(default, rename = "kubernetes-account")]
     pub kubernetes_account: Option<KubernetesAccount>,
+}
+
+/// An domain declaration
+#[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct Domain {
+    /// A label for the entity visible in the document namespace.
+    pub label: Spanned<String>,
+}
+
+/// An association of a service and a domain the service can use.
+#[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct ServiceDomain {
+    /// A label for the entity visible in the document namespace.
+    pub service: Spanned<String>,
+
+    /// A label identifying the domain.
+    pub domain: Spanned<String>,
 }
 
 /// An email address assignment.
