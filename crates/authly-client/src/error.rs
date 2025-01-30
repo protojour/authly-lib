@@ -20,6 +20,10 @@ pub enum Error {
     #[error("identity error: {0}")]
     Identity(&'static str),
 
+    /// A problem with TLS infrastructure
+    #[error("tls problem: {0}")]
+    Tls(&'static str),
+
     /// Automatic environment inference did not work.
     #[error(
         "environment not inferrable: Neither {IDENTITY_PATH} or {K8S_SA_TOKENFILE_PATH} exists"

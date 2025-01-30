@@ -64,21 +64,18 @@ impl ClientBuilder {
 
     /// Get the current Authly identity of the builder as a PEM-encoded byte buffer.
     pub fn get_identity_pem(&self) -> Result<Cow<[u8]>, Error> {
-        let identity = self
-            .inner
+        self.inner
             .identity
             .as_ref()
-            .ok_or_else(|| Error::Identity("unconfigured"))?;
-
-        let mut identity_pem = identity.cert_pem.clone();
-        identity_pem.extend(&identity.key_pem);
-        Ok(Cow::Owned(identity_pem))
+            .ok_or_else(|| Error::Identity("unconfigured"))?
+            .to_pem()
     }
 
     /// Connect to Authly
     pub async fn connect(self) -> Result<Client, Error> {
         let params = self.inner.try_into_connection_params()?;
         let connection = make_connection(params.clone()).await?;
+        let (reconfigured_tx, reconfigured_rx) = tokio::sync::watch::channel(params.clone());
 
         let reconfigure = match params.inference {
             Inference::Inferred => ReconfigureStrategy::ReInfer {
@@ -95,11 +92,12 @@ impl ClientBuilder {
         let state = Arc::new(ClientState {
             conn: ArcSwap::new(Arc::new(connection)),
             reconfigure,
+            reconfigured_rx,
             closed_tx,
             resource_property_mapping: ArcSwap::new(resource_property_mapping),
         });
 
-        spawn_background_worker(state.clone(), closed_rx).await?;
+        spawn_background_worker(state.clone(), reconfigured_tx, closed_rx).await?;
 
         let client = Client { state };
 
