@@ -25,7 +25,7 @@ attributes = ["authly:role:authenticate", "authly:role:get_access_token"]
 kubernetes-account = { name = "testservice", namespace = "authly-test" }
 
 [[entity-property]]
-service = "testservice"
+domain = "testservice"
 label = "role"
 attributes = ["ui/user", "ui/admin"]
 
@@ -34,52 +34,47 @@ eid = "7d8b18fa5836487592a43eacea830b47"
 attributes = ["testservice:role:ui/user"]
 
 [[resource-property]]
-service = "testservice"
+domain = "testservice"
 label = "name"
 attributes = ["ontology", "storage"]
 
 [[resource-property]]
-service = "testservice"
+domain = "testservice"
 label = "ontology/action"
 attributes = ["read", "deploy", "stop"]
 
 [[resource-property]]
-service = "testservice"
+domain = "testservice"
 label = "buckets/action"
 attributes = ["read"]
 
 [[resource-property]]
-service = "testservice"
+domain = "testservice"
 label = "bucket/action"
 attributes = ["read", "create", "delete"]
 
 [[resource-property]]
-service = "testservice"
+domain = "testservice"
 label = "object/action"
 attributes = ["read", "create", "delete"]
 
 [[policy]]
-service = "testservice"
 label = "allow for main service"
 allow = "Subject.entity == testservice"
 
 [[policy]]
-service = "testservice"
 label = "allow for UI user"
 allow = "Subject.testservice:role contains testservice:role:ui/user"
 
 [[policy]]
-service = "testservice"
 label = "allow for UI admin"
 allow = "Subject.testservice:role contains testservice:role:ui/admin"
 
 [[policy-binding]]
-service = "testservice"
 attributes = ["testservice:ontology/action:read"]
 policies = ["allow for main service", "allow for UI user"]
 
 [[policy-binding]]
-service = "testservice"
 attributes = ["testservice:ontology/action:deploy"]
 policies = ["allow for main service", "allow for UI admin"]
 "#;
