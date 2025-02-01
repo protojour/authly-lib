@@ -46,8 +46,17 @@ message AccessToken {
 
 // The response of a property mappings request.
 message PropertyMappingsResponse {
-    // The list of properties.
-    repeated PropertyMapping properties = 1;
+    // The list of namespaces.
+    repeated PropertyMappingNamespace namespaces = 1;
+}
+
+// A mapping for a property namespace.
+message PropertyMappingNamespace {
+    // The namespace name.
+    string label = 1;
+
+    // The list of properties in the namespace.
+    repeated PropertyMapping properties = 2;
 }
 
 // A mapping for a single property.

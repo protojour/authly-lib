@@ -6,9 +6,15 @@ use fnv::FnvHashSet;
 
 use crate::id::{AnyId, ObjId};
 
+/// A namespaced property mapping maps human-readable property and attribute labels to [ObjId]s.
+#[derive(Clone, Default)]
+pub struct NamespacePropertyMapping {
+    namespaces: HashMap<String, PropertyMappings>,
+}
+
 /// A property mapping maps human-readable property and attribute labels to [ObjId]s.
 #[derive(Clone, Default)]
-pub struct PropertyMapping {
+pub struct PropertyMappings {
     properties: HashMap<String, AttributeMappings>,
 }
 
@@ -18,34 +24,39 @@ pub struct AttributeMappings {
     attributes: HashMap<String, ObjId>,
 }
 
-impl PropertyMapping {
-    /// Add an property/attribute/attribute-id triple to the mapping.
-    pub fn add(&mut self, property_label: String, attribute_label: String, attribute_id: ObjId) {
-        self.properties
-            .entry(property_label)
-            .or_default()
-            .attributes
-            .insert(attribute_label, attribute_id);
+impl NamespacePropertyMapping {
+    /// Get a mutable reference to the namespace
+    pub fn namespace_mut(&mut self, namespace_label: String) -> &mut PropertyMappings {
+        self.namespaces.entry(namespace_label).or_default()
     }
 
     /// Get the object ID of a single property/attribute label pair, if found.
     pub fn attribute_object_id(
         &self,
+        namespace_label: &str,
         property_label: &str,
         attribute_label: &str,
     ) -> Option<ObjId> {
-        let attribute_mapping = self.properties.get(property_label)?;
-        attribute_mapping.attributes.get(attribute_label).cloned()
+        self.namespaces
+            .get(namespace_label)?
+            .properties
+            .get(property_label)?
+            .attributes
+            .get(attribute_label)
+            .cloned()
     }
 
-    /// Translate the given property/attribute labels to underlying [ObjId]s.
+    /// Translate the given namespace/property/attribute labels to underlying [ObjId]s.
     pub fn translate<'a>(
         &self,
-        attributes: impl IntoIterator<Item = (&'a str, &'a str)>,
+        attributes: impl IntoIterator<Item = (&'a str, &'a str, &'a str)>,
     ) -> FnvHashSet<AnyId> {
         let mut output = FnvHashSet::default();
-        for (prop, attr) in attributes {
-            let Some(attr_mappings) = self.properties.get(prop) else {
+        for (namespace, prop, attr) in attributes {
+            let Some(prop_mappings) = self.namespaces.get(namespace) else {
+                continue;
+            };
+            let Some(attr_mappings) = prop_mappings.properties.get(prop) else {
                 continue;
             };
             let Some(attr_id) = attr_mappings.attributes.get(attr) else {
@@ -59,7 +70,41 @@ impl PropertyMapping {
     }
 }
 
-impl IntoIterator for PropertyMapping {
+impl PropertyMappings {
+    /// Get a mutable reference to the attribute mappings of a property.
+    pub fn property_mut(&mut self, property_label: String) -> &mut AttributeMappings {
+        self.properties.entry(property_label).or_default()
+    }
+}
+
+impl AttributeMappings {
+    /// Put a new attribute id under the attribute label.
+    pub fn put(&mut self, attribute_label: String, attribute_id: ObjId) {
+        self.attributes
+            .entry(attribute_label)
+            .insert_entry(attribute_id);
+    }
+}
+
+impl IntoIterator for NamespacePropertyMapping {
+    type IntoIter = hash_map::IntoIter<String, PropertyMappings>;
+    type Item = (String, PropertyMappings);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.namespaces.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a NamespacePropertyMapping {
+    type IntoIter = hash_map::Iter<'a, String, PropertyMappings>;
+    type Item = (&'a String, &'a PropertyMappings);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.namespaces.iter()
+    }
+}
+
+impl IntoIterator for PropertyMappings {
     type IntoIter = hash_map::IntoIter<String, AttributeMappings>;
     type Item = (String, AttributeMappings);
 
@@ -68,7 +113,7 @@ impl IntoIterator for PropertyMapping {
     }
 }
 
-impl<'a> IntoIterator for &'a PropertyMapping {
+impl<'a> IntoIterator for &'a PropertyMappings {
     type IntoIter = hash_map::Iter<'a, String, AttributeMappings>;
     type Item = (&'a String, &'a AttributeMappings);
 

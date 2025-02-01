@@ -5,7 +5,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-pub use authly_common::service::PropertyMapping;
+pub use authly_common::service::NamespacePropertyMapping;
 pub use builder::ClientBuilder;
 use builder::ConnectionParamsBuilder;
 use connection::{Connection, ConnectionParams, ReconfigureStrategy};
@@ -79,7 +79,7 @@ struct ClientState {
     /// It's kept in an ArcSwap to potentially support live-update of this structure.
     /// For that to work, the client should keep a subscription option and listen
     /// for change events and re-download the property mapping.
-    resource_property_mapping: ArcSwap<PropertyMapping>,
+    resource_property_mapping: ArcSwap<NamespacePropertyMapping>,
 }
 
 impl Drop for ClientState {
@@ -130,7 +130,7 @@ impl Client {
     }
 
     /// Get the current resource properties of this service, in the form of a [PropertyMapping].
-    pub fn get_resource_property_mapping(&self) -> Arc<PropertyMapping> {
+    pub fn get_resource_property_mapping(&self) -> Arc<NamespacePropertyMapping> {
         self.state.resource_property_mapping.load_full()
     }
 

@@ -28,6 +28,12 @@ pub struct Document {
     pub service_entity: Vec<Entity>,
 
     #[serde(default)]
+    pub domain: Vec<Domain>,
+
+    #[serde(default, rename = "service-domain")]
+    pub service_domain: Vec<ServiceDomain>,
+
+    #[serde(default)]
     pub email: Vec<Email>,
 
     #[serde(default, rename = "password-hash")]
@@ -92,6 +98,25 @@ pub struct Entity {
     pub kubernetes_account: Option<KubernetesAccount>,
 }
 
+/// An domain declaration
+#[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct Domain {
+    /// A label for the entity visible in the document namespace.
+    pub label: Spanned<String>,
+}
+
+/// An association of a service and a domain the service can use.
+#[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct ServiceDomain {
+    /// A label identifying the impliied service-entity.
+    pub service: Spanned<String>,
+
+    /// A label identifying the domain that will be exposed to the service.
+    pub domain: Spanned<String>,
+}
+
 /// An email address assignment.
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -131,9 +156,9 @@ pub struct Members {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EntityProperty {
-    /// The label of the service which defines this entity property.
+    /// The label of the domain which defines this entity property.
     #[serde(default)]
-    pub service: Option<Spanned<String>>,
+    pub domain: Option<Spanned<String>>,
 
     /// The property label.
     pub label: Spanned<String>,
@@ -158,8 +183,8 @@ pub struct KubernetesAccount {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResourceProperty {
-    /// The label of the service which defines this resource property.
-    pub service: Spanned<String>,
+    /// The label of the domain which defines this resource property.
+    pub domain: Spanned<String>,
 
     /// The property label.
     pub label: Spanned<String>,
@@ -175,9 +200,6 @@ pub struct ResourceProperty {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
-    /// The label of the service this policy belongs to.
-    pub service: Spanned<String>,
-
     /// The policy label.
     pub label: Spanned<String>,
 
@@ -193,9 +215,6 @@ pub struct Policy {
 /// A policy binding.
 #[derive(Deserialize)]
 pub struct PolicyBinding {
-    /// The label of the service the binding applies to.
-    pub service: Spanned<String>,
-
     /// The attribute set which will trigger the policy set.
     pub attributes: Vec<Spanned<QualifiedAttributeName>>,
 
