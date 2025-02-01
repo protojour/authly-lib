@@ -5,7 +5,7 @@ use std::sync::Arc;
 use authly_common::{
     id::{Eid, ObjId},
     proto::service::{self as proto, authly_service_client::AuthlyServiceClient},
-    service::PropertyMapping,
+    service::NamespacePropertyMapping,
 };
 use fnv::FnvHashSet;
 use http::header::AUTHORIZATION;
@@ -21,7 +21,7 @@ use crate::{error, id_codec_error, token::AccessToken, Client, Error};
 // 2. The service is conscious about its mesh, and is allowed to keep an in-memory map of incoming service entity attributes.
 pub struct AccessControlRequestBuilder<'c> {
     client: &'c Client,
-    property_mapping: Arc<PropertyMapping>,
+    property_mapping: Arc<NamespacePropertyMapping>,
     access_token: Option<Arc<AccessToken>>,
     resource_attributes: FnvHashSet<ObjId>,
     peer_entity_ids: FnvHashSet<Eid>,
@@ -51,8 +51,8 @@ impl<'c> AccessControlRequestBuilder<'c> {
     /// let client = Client::builder().connect().await?;
     ///
     /// client.access_control_request()
-    ///     .resource_attribute("type", "orders")?
-    ///     .resource_attribute("action", "read")?
+    ///     .resource_attribute("my_namespace", "type", "orders")?
+    ///     .resource_attribute("my_namespace", "action", "read")?
     ///     .send()
     ///     .await?;
     ///
@@ -61,12 +61,13 @@ impl<'c> AccessControlRequestBuilder<'c> {
     /// ```
     pub fn resource_attribute(
         mut self,
+        namespace_label: &str,
         property_label: &str,
         attribute_label: &str,
     ) -> Result<Self, Error> {
         let obj_id = self
             .property_mapping
-            .attribute_object_id(property_label, attribute_label)
+            .attribute_object_id(namespace_label, property_label, attribute_label)
             .ok_or(Error::InvalidPropertyAttributeLabel)?;
 
         self.resource_attributes.insert(obj_id);
@@ -128,21 +129,26 @@ impl<'c> AccessControlRequestBuilder<'c> {
 
 pub(crate) async fn get_resource_property_mapping(
     mut service: AuthlyServiceClient<Channel>,
-) -> Result<Arc<PropertyMapping>, Error> {
+) -> Result<Arc<NamespacePropertyMapping>, Error> {
     let response = service
         .get_resource_property_mappings(proto::Empty::default())
         .await
         .map_err(error::tonic)?;
 
-    let mut property_mapping = PropertyMapping::default();
+    let mut property_mapping = NamespacePropertyMapping::default();
 
-    for property in response.into_inner().properties {
-        for attribute in property.attributes {
-            property_mapping.add(
-                property.label.clone(),
-                attribute.label,
-                ObjId::from_bytes(&attribute.obj_id).ok_or_else(id_codec_error)?,
-            );
+    for namespace in response.into_inner().namespaces {
+        let ns = property_mapping.namespace_mut(namespace.label);
+
+        for property in namespace.properties {
+            let ns_prop = ns.property_mut(property.label);
+
+            for attribute in property.attributes {
+                ns_prop.put(
+                    attribute.label,
+                    ObjId::from_bytes(&attribute.obj_id).ok_or_else(id_codec_error)?,
+                );
+            }
         }
     }
 
