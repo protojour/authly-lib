@@ -20,6 +20,7 @@ const BAR: AnyId = AnyId::from_uint(1);
 const BAZ: AnyId = AnyId::from_uint(2);
 const QUX: AnyId = AnyId::from_uint(3);
 const BOG: AnyId = AnyId::from_uint(4);
+const EXTRA: AnyId = AnyId::from_uint(42);
 
 fn true_policy() -> Vec<u8> {
     to_bytecode(&[
@@ -75,15 +76,24 @@ fn test_allow_class() {
     e.add_trigger([BAZ, QUX], [POL_ALLOW_FALSE0, POL_ALLOW_TRUE0]);
 
     assert_eq!("deny", eval_attrs(&e, []));
+    assert_eq!("deny", eval_attrs(&e, [EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [FOO]));
+    assert_eq!("deny", eval_attrs(&e, [FOO, EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [BAZ]));
+    assert_eq!("deny", eval_attrs(&e, [BAZ, EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [QUX]));
+    assert_eq!("deny", eval_attrs(&e, [QUX, EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [BOG]));
+    assert_eq!("deny", eval_attrs(&e, [BOG, EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [FOO, BAZ]));
+    assert_eq!("deny", eval_attrs(&e, [FOO, BAZ, EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [FOO, QUX]));
+    assert_eq!("deny", eval_attrs(&e, [FOO, QUX, EXTRA]));
 
     assert_eq!("allow", eval_attrs(&e, [BAR]));
+    assert_eq!("allow", eval_attrs(&e, [BAR, EXTRA]));
     assert_eq!("allow", eval_attrs(&e, [BAZ, QUX]));
+    assert_eq!("allow", eval_attrs(&e, [BAZ, QUX, EXTRA]));
 }
 
 #[test_log::test]
@@ -95,18 +105,30 @@ fn test_deny_class() {
     e.add_trigger([QUX, BOG], [POL_DENY_FALSE0, POL_DENY_FALSE1]);
 
     assert_eq!("deny", eval_attrs(&e, []));
+    assert_eq!("deny", eval_attrs(&e, [EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [BAR]));
+    assert_eq!("deny", eval_attrs(&e, [BAR, EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [BAZ]));
+    assert_eq!("deny", eval_attrs(&e, [BAZ, EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [QUX]));
+    assert_eq!("deny", eval_attrs(&e, [QUX, EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [BOG]));
+    assert_eq!("deny", eval_attrs(&e, [BOG, EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [BAZ, QUX]));
+    assert_eq!("deny", eval_attrs(&e, [BAZ, QUX, EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [BAR, QUX]));
+    assert_eq!("deny", eval_attrs(&e, [BAR, QUX, EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [BAZ, BOG]));
+    assert_eq!("deny", eval_attrs(&e, [BAZ, BOG, EXTRA]));
 
     assert_eq!("allow", eval_attrs(&e, [FOO]));
+    assert_eq!("allow", eval_attrs(&e, [FOO, EXTRA]));
     assert_eq!("allow", eval_attrs(&e, [FOO, BAZ]));
+    assert_eq!("allow", eval_attrs(&e, [FOO, BAZ, EXTRA]));
     assert_eq!("allow", eval_attrs(&e, [FOO, QUX]));
+    assert_eq!("allow", eval_attrs(&e, [FOO, QUX, EXTRA]));
     assert_eq!("allow", eval_attrs(&e, [QUX, BOG]));
+    assert_eq!("allow", eval_attrs(&e, [QUX, BOG, EXTRA]));
 }
 
 #[test_log::test]
@@ -145,11 +167,18 @@ fn test_allow_deny_classes() {
     );
 
     assert_eq!("deny", eval_attrs(&e, []));
+    assert_eq!("deny", eval_attrs(&e, [EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [FOO]));
+    assert_eq!("deny", eval_attrs(&e, [FOO, EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [NO, FOO]));
+    assert_eq!("deny", eval_attrs(&e, [NO, FOO, EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [NO, BAR]));
+    assert_eq!("deny", eval_attrs(&e, [NO, BAR, EXTRA]));
     assert_eq!("deny", eval_attrs(&e, [NO, BAZ]));
+    assert_eq!("deny", eval_attrs(&e, [NO, BAZ, EXTRA]));
 
     assert_eq!("allow", eval_attrs(&e, [YES, FOO]));
+    assert_eq!("allow", eval_attrs(&e, [YES, FOO, EXTRA]));
     assert_eq!("allow", eval_attrs(&e, [YES, BAR]));
+    assert_eq!("allow", eval_attrs(&e, [YES, BAR, EXTRA]));
 }
