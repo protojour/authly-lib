@@ -62,6 +62,24 @@ struct PolicyTrigger {
     pub policy_ids: BTreeSet<PolicyId>,
 }
 
+/// A tracer used to collect debugging information from the policy engine
+#[allow(unused)]
+pub trait PolicyTracer {
+    /// Reports applicable policies of a specific class
+    fn report_applicable(&mut self, class: PolicyValue, policies: impl Iterator<Item = PolicyId>) {}
+
+    /// Report start of a policy evaluation
+    fn report_policy_eval_start(&mut self, policy_id: PolicyId) {}
+
+    /// Reports the value of policy after it has been evaluated
+    fn report_policy_eval_end(&mut self, value: bool) {}
+}
+
+/// A [PolicyTracer] that does nothing.
+pub struct NoOpPolicyTracer;
+
+impl PolicyTracer for NoOpPolicyTracer {}
+
 /// A placeholder for how to refer to a local policy
 type PolicyId = ObjId;
 
@@ -121,7 +139,11 @@ impl PolicyEngine {
     }
 
     /// Perform an access control evalution of the given parameters within this engine.
-    pub fn eval(&self, params: &AccessControlParams) -> Result<PolicyValue, EvalError> {
+    pub fn eval(
+        &self,
+        params: &AccessControlParams,
+        tracer: &mut impl PolicyTracer,
+    ) -> Result<PolicyValue, EvalError> {
         let mut eval_ctx = EvalCtx {
             applicable_allow: Default::default(),
             applicable_deny: Default::default(),
@@ -135,8 +157,13 @@ impl PolicyEngine {
             self.collect_applicable(*attr, params, &mut eval_ctx)?;
         }
 
-        #[cfg(feature = "policy_debug")]
-        tracing::info!("\n{params:?}\n{eval_ctx:?}");
+        {
+            tracer.report_applicable(PolicyValue::Deny, eval_ctx.applicable_deny.keys().copied());
+            tracer.report_applicable(
+                PolicyValue::Allow,
+                eval_ctx.applicable_allow.keys().copied(),
+            );
+        }
 
         let has_allow = !eval_ctx.applicable_allow.is_empty();
         let has_deny = !eval_ctx.applicable_deny.is_empty();
@@ -154,23 +181,25 @@ impl PolicyEngine {
             }
             (true, false) => {
                 // starts in Deny state, try to prove Allow
-                let is_allow = eval_policies_disjunctive(eval_ctx.applicable_allow, params)?;
+                let is_allow =
+                    eval_policies_disjunctive(eval_ctx.applicable_allow, params, tracer)?;
                 Ok(PolicyValue::from(is_allow))
             }
             (false, true) => {
                 // starts in Allow state, try to prove Deny
-                let is_deny = eval_policies_disjunctive(eval_ctx.applicable_deny, params)?;
+                let is_deny = eval_policies_disjunctive(eval_ctx.applicable_deny, params, tracer)?;
                 Ok(PolicyValue::from(!is_deny))
             }
             (true, true) => {
                 // starts in Deny state, try to prove Allow
-                let is_allow = eval_policies_disjunctive(eval_ctx.applicable_allow, params)?;
+                let is_allow =
+                    eval_policies_disjunctive(eval_ctx.applicable_allow, params, tracer)?;
                 if !is_allow {
                     return Ok(PolicyValue::Deny);
                 }
 
                 // moved into in Allow state, try to prove Deny
-                let is_deny = eval_policies_disjunctive(eval_ctx.applicable_deny, params)?;
+                let is_deny = eval_policies_disjunctive(eval_ctx.applicable_deny, params, tracer)?;
                 Ok(PolicyValue::from(!is_deny))
             }
         }
@@ -235,9 +264,16 @@ impl PolicyEngine {
 fn eval_policies_disjunctive(
     map: FnvHashMap<PolicyId, &Policy>,
     params: &AccessControlParams,
+    tracer: &mut impl PolicyTracer,
 ) -> Result<bool, EvalError> {
-    for policy in map.values() {
-        if eval_policy(&policy.bytecode, params)? {
+    for (policy_id, policy) in &map {
+        tracer.report_policy_eval_start(*policy_id);
+
+        let value = eval_policy(&policy.bytecode, params)?;
+
+        tracer.report_policy_eval_end(value);
+
+        if value {
             return Ok(true);
         }
     }
@@ -247,23 +283,14 @@ fn eval_policies_disjunctive(
 
 /// Evaluate one standalone policy on the given access control parameters
 fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<bool, EvalError> {
-    #[cfg(feature = "policy_debug")]
-    tracing::info!("eval_policy");
-
     let mut stack: Vec<StackItem> = Vec::with_capacity(16);
 
     while let Some(code) = pc.first() {
-        #[cfg(feature = "policy_debug")]
-        tracing::info!("    stack {stack:?}");
-
         pc = &pc[1..];
 
         let Ok(code) = Bytecode::try_from(*code) else {
             return Err(EvalError::Program);
         };
-
-        #[cfg(feature = "policy_debug")]
-        tracing::info!("  eval code {code:?}");
 
         match code {
             Bytecode::LoadSubjectId => {

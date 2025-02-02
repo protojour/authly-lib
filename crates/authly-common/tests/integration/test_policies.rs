@@ -2,7 +2,7 @@ use authly_common::{
     id::{AnyId, ObjId},
     policy::{
         code::{to_bytecode, OpCode, PolicyValue},
-        engine::{AccessControlParams, PolicyEngine},
+        engine::{AccessControlParams, NoOpPolicyTracer, PolicyEngine},
     },
 };
 
@@ -54,10 +54,13 @@ fn test_engine_with_policies() -> PolicyEngine {
 
 #[track_caller]
 fn eval_attrs(engine: &PolicyEngine, attrs: impl IntoIterator<Item = AnyId>) -> &'static str {
-    match engine.eval(&AccessControlParams {
-        resource_attrs: attrs.into_iter().collect(),
-        ..Default::default()
-    }) {
+    match engine.eval(
+        &AccessControlParams {
+            resource_attrs: attrs.into_iter().collect(),
+            ..Default::default()
+        },
+        &mut NoOpPolicyTracer,
+    ) {
         Ok(PolicyValue::Allow) => "allow",
         Ok(PolicyValue::Deny) => "deny",
         Err(err) => panic!("{err:?}"),
