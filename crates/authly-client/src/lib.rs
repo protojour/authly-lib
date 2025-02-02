@@ -109,7 +109,7 @@ impl Client {
             .map_err(error::tonic)?
             .into_inner();
 
-        Eid::from_bytes(&metadata.entity_id).ok_or_else(id_codec_error)
+        Eid::from_raw_bytes(&metadata.entity_id).ok_or_else(id_codec_error)
     }
 
     /// The name of this client.

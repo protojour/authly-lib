@@ -5,7 +5,7 @@ const ENTITY: &str = r#"
 id = "d783648f-e6ac-4492-87f7-43d5e5805d60"
 
 [[entity]]
-eid = "7d8b18fa5836487592a43eacea830b47"
+eid = "e.7d8b18fa5836487592a43eacea830b47"
 label = "me"
 email = ["me@mail.com"]
 username = "testuser"
@@ -19,7 +19,7 @@ const SVC: &str = r#"
 id = "bc9ce588-50c3-47d1-94c1-f88b21eaf299"
 
 [[service-entity]]
-eid = "2671d2a0bc3545e69fc666130254f8e9"
+eid = "e.2671d2a0bc3545e69fc666130254f8e9"
 label = "testservice"
 attributes = ["authly:role:authenticate", "authly:role:get_access_token"]
 kubernetes-account = { name = "testservice", namespace = "authly-test" }
@@ -30,7 +30,7 @@ label = "role"
 attributes = ["ui/user", "ui/admin"]
 
 [[entity-attribute-binding]]
-eid = "7d8b18fa5836487592a43eacea830b47"
+eid = "e.7d8b18fa5836487592a43eacea830b47"
 attributes = ["testservice:role:ui/user"]
 
 [[resource-property]]
@@ -97,8 +97,8 @@ fn test_entity() {
     // BUG: The span is off:
     assert_eq!(&toml[24..62], "\"d783648f-e6ac-4492-87f7-43d5e5805d60\"");
 
-    assert_eq!(document.entity[0].eid.span(), 81..115);
-    assert_eq!(&toml[81..115], "\"7d8b18fa5836487592a43eacea830b47\"");
+    assert_eq!(document.entity[0].eid.span(), 81..117);
+    assert_eq!(&toml[81..117], "\"e.7d8b18fa5836487592a43eacea830b47\"");
 
     assert_eq!(document.entity.len(), 1);
 }

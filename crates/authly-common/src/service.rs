@@ -4,15 +4,15 @@ use std::collections::{hash_map, HashMap};
 
 use fnv::FnvHashSet;
 
-use crate::id::{AnyId, ObjId};
+use crate::id::AttrId;
 
-/// A namespaced property mapping maps human-readable property and attribute labels to [ObjId]s.
+/// A namespaced property mapping maps human-readable property and attribute labels to [AttrId]s.
 #[derive(Clone, Default)]
 pub struct NamespacePropertyMapping {
     namespaces: HashMap<String, PropertyMappings>,
 }
 
-/// A property mapping maps human-readable property and attribute labels to [ObjId]s.
+/// A property mapping maps human-readable property and attribute labels to [AttrId]s.
 #[derive(Clone, Default)]
 pub struct PropertyMappings {
     properties: HashMap<String, AttributeMappings>,
@@ -21,7 +21,7 @@ pub struct PropertyMappings {
 /// Attribute mappings for a property.
 #[derive(Clone, Default)]
 pub struct AttributeMappings {
-    attributes: HashMap<String, ObjId>,
+    attributes: HashMap<String, AttrId>,
 }
 
 impl NamespacePropertyMapping {
@@ -36,7 +36,7 @@ impl NamespacePropertyMapping {
         namespace_label: &str,
         property_label: &str,
         attribute_label: &str,
-    ) -> Option<ObjId> {
+    ) -> Option<AttrId> {
         self.namespaces
             .get(namespace_label)?
             .properties
@@ -46,11 +46,11 @@ impl NamespacePropertyMapping {
             .cloned()
     }
 
-    /// Translate the given namespace/property/attribute labels to underlying [ObjId]s.
+    /// Translate the given namespace/property/attribute labels to underlying [AttrId]s.
     pub fn translate<'a>(
         &self,
         attributes: impl IntoIterator<Item = (&'a str, &'a str, &'a str)>,
-    ) -> FnvHashSet<AnyId> {
+    ) -> FnvHashSet<AttrId> {
         let mut output = FnvHashSet::default();
         for (namespace, prop, attr) in attributes {
             let Some(prop_mappings) = self.namespaces.get(namespace) else {
@@ -63,7 +63,7 @@ impl NamespacePropertyMapping {
                 continue;
             };
 
-            output.insert(attr_id.to_any());
+            output.insert(*attr_id);
         }
 
         output
@@ -79,7 +79,7 @@ impl PropertyMappings {
 
 impl AttributeMappings {
     /// Put a new attribute id under the attribute label.
-    pub fn put(&mut self, attribute_label: String, attribute_id: ObjId) {
+    pub fn put(&mut self, attribute_label: String, attribute_id: AttrId) {
         self.attributes
             .entry(attribute_label)
             .insert_entry(attribute_id);
@@ -123,8 +123,8 @@ impl<'a> IntoIterator for &'a PropertyMappings {
 }
 
 impl IntoIterator for AttributeMappings {
-    type IntoIter = hash_map::IntoIter<String, ObjId>;
-    type Item = (String, ObjId);
+    type IntoIter = hash_map::IntoIter<String, AttrId>;
+    type Item = (String, AttrId);
 
     fn into_iter(self) -> Self::IntoIter {
         self.attributes.into_iter()
@@ -132,8 +132,8 @@ impl IntoIterator for AttributeMappings {
 }
 
 impl<'a> IntoIterator for &'a AttributeMappings {
-    type IntoIter = hash_map::Iter<'a, String, ObjId>;
-    type Item = (&'a String, &'a ObjId);
+    type IntoIter = hash_map::Iter<'a, String, AttrId>;
+    type Item = (&'a String, &'a AttrId);
 
     fn into_iter(self) -> Self::IntoIter {
         self.attributes.iter()

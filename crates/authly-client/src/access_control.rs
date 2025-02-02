@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use authly_common::{
-    id::{Eid, ObjId},
+    id::{AttrId, Eid},
     proto::service::{self as proto, authly_service_client::AuthlyServiceClient},
     service::NamespacePropertyMapping,
 };
@@ -23,7 +23,7 @@ pub struct AccessControlRequestBuilder<'c> {
     client: &'c Client,
     property_mapping: Arc<NamespacePropertyMapping>,
     access_token: Option<Arc<AccessToken>>,
-    resource_attributes: FnvHashSet<ObjId>,
+    resource_attributes: FnvHashSet<AttrId>,
     peer_entity_ids: FnvHashSet<Eid>,
 }
 
@@ -65,12 +65,12 @@ impl<'c> AccessControlRequestBuilder<'c> {
         property_label: &str,
         attribute_label: &str,
     ) -> Result<Self, Error> {
-        let obj_id = self
+        let attr_id = self
             .property_mapping
             .attribute_object_id(namespace_label, property_label, attribute_label)
             .ok_or(Error::InvalidPropertyAttributeLabel)?;
 
-        self.resource_attributes.insert(obj_id);
+        self.resource_attributes.insert(attr_id);
         Ok(self)
     }
 
@@ -96,14 +96,14 @@ impl<'c> AccessControlRequestBuilder<'c> {
             resource_attributes: self
                 .resource_attributes
                 .into_iter()
-                .map(|attr| attr.to_bytes().to_vec())
+                .map(|attr| attr.to_raw_array().to_vec())
                 .collect(),
             // Peer entity attributes are currently not known to the service:
             peer_entity_attributes: vec![],
             peer_entity_ids: self
                 .peer_entity_ids
                 .into_iter()
-                .map(|eid| eid.to_bytes().to_vec())
+                .map(|eid| eid.to_raw_array().to_vec())
                 .collect(),
         });
         if let Some(access_token) = self.access_token {
@@ -146,7 +146,7 @@ pub(crate) async fn get_resource_property_mapping(
             for attribute in property.attributes {
                 ns_prop.put(
                     attribute.label,
-                    ObjId::from_bytes(&attribute.obj_id).ok_or_else(id_codec_error)?,
+                    AttrId::from_raw_bytes(&attribute.obj_id).ok_or_else(id_codec_error)?,
                 );
             }
         }

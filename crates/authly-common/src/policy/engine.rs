@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use fnv::{FnvHashMap, FnvHashSet};
 use tracing::error;
 
-use crate::id::{AnyId, ObjId};
+use crate::id::{AttrId, Eid, Id128, PolicyId, PropId};
 
 use super::code::{Bytecode, PolicyValue};
 
@@ -28,16 +28,16 @@ pub enum EvalError {
 #[derive(Default, Debug)]
 pub struct AccessControlParams {
     /// Entity IDs related to the `subject`.
-    pub subject_eids: FnvHashMap<AnyId, AnyId>,
+    pub subject_eids: FnvHashMap<PropId, Eid>,
 
     /// Attributes related to the `subject`.
-    pub subject_attrs: FnvHashSet<AnyId>,
+    pub subject_attrs: FnvHashSet<AttrId>,
 
     /// Entity IDs related to the `resource`.
-    pub resource_eids: FnvHashMap<AnyId, AnyId>,
+    pub resource_eids: FnvHashMap<PropId, Eid>,
 
     /// Attributes related to the `resource`.
-    pub resource_attrs: FnvHashSet<AnyId>,
+    pub resource_attrs: FnvHashSet<AttrId>,
 }
 
 /// The state of the policy engine.
@@ -49,14 +49,14 @@ pub struct PolicyEngine {
 
     /// The triggers in this map are keyed by the one of the
     /// attributes that has to match the trigger.
-    trigger_groups: FnvHashMap<AnyId, Vec<PolicyTrigger>>,
+    trigger_groups: FnvHashMap<AttrId, Vec<PolicyTrigger>>,
 }
 
 /// The policy trigger maps a set of attributes to a set of policies.
 #[derive(Debug)]
 struct PolicyTrigger {
     /// The set of attributes that has to match for this policy to trigger
-    pub attr_matcher: BTreeSet<AnyId>,
+    pub attr_matcher: BTreeSet<AttrId>,
 
     /// The policy which gets triggered by this attribute matcher
     pub policy_ids: BTreeSet<PolicyId>,
@@ -80,9 +80,6 @@ pub struct NoOpPolicyTracer;
 
 impl PolicyTracer for NoOpPolicyTracer {}
 
-/// A placeholder for how to refer to a local policy
-type PolicyId = ObjId;
-
 #[derive(Debug)]
 struct Policy {
     class: PolicyValue,
@@ -92,8 +89,9 @@ struct Policy {
 #[derive(PartialEq, Eq, Debug)]
 enum StackItem<'a> {
     Uint(u64),
-    IdSet(&'a FnvHashSet<AnyId>),
-    Id(AnyId),
+    AttrIdSet(&'a FnvHashSet<AttrId>),
+    EntityId(Eid),
+    AttrId(AttrId),
 }
 
 #[derive(Debug)]
@@ -104,22 +102,22 @@ struct EvalCtx<'e> {
 
 impl PolicyEngine {
     /// Adds a new policy to the engine.
-    pub fn add_policy(&mut self, id: ObjId, class: PolicyValue, bytecode: Vec<u8>) {
+    pub fn add_policy(&mut self, id: PolicyId, class: PolicyValue, bytecode: Vec<u8>) {
         self.policies.insert(id, Policy { class, bytecode });
     }
 
     /// Adds a new policy trigger to the engine.
     pub fn add_trigger(
         &mut self,
-        attr_matcher: impl Into<BTreeSet<AnyId>>,
-        policy_ids: impl Into<BTreeSet<ObjId>>,
+        attr_matcher: impl Into<BTreeSet<AttrId>>,
+        policy_ids: impl Into<BTreeSet<PolicyId>>,
     ) {
         let attr_matcher = attr_matcher.into();
         let policy_ids = policy_ids.into();
 
         if let Some(first_attr) = attr_matcher.iter().next() {
             self.trigger_groups
-                .entry(first_attr.to_any())
+                .entry(*first_attr)
                 .or_default()
                 .push(PolicyTrigger {
                     attr_matcher,
@@ -207,7 +205,7 @@ impl PolicyEngine {
 
     fn collect_applicable<'e>(
         &'e self,
-        attr: AnyId,
+        attr: AttrId,
         params: &AccessControlParams,
         eval_ctx: &mut EvalCtx<'e>,
     ) -> Result<(), EvalError> {
@@ -220,7 +218,7 @@ impl PolicyEngine {
             if policy_trigger.attr_matcher.len() > 1 {
                 // a multi-attribute trigger: needs some post-processing
                 // to figure out if it applies
-                let mut matches: BTreeSet<AnyId> = Default::default();
+                let mut matches: BTreeSet<AttrId> = Default::default();
 
                 for attrs in [&params.subject_attrs, &params.resource_attrs] {
                     for attr in attrs {
@@ -298,26 +296,31 @@ fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<bool, Eval
                 let Some(id) = params.subject_eids.get(&key) else {
                     return Err(EvalError::Type);
                 };
-                stack.push(StackItem::Id(*id));
+                stack.push(StackItem::EntityId(*id));
                 pc = next;
             }
             Bytecode::LoadSubjectAttrs => {
-                stack.push(StackItem::IdSet(&params.subject_attrs));
+                stack.push(StackItem::AttrIdSet(&params.subject_attrs));
             }
             Bytecode::LoadResourceId => {
                 let (key, next) = decode_id(pc)?;
                 let Some(id) = params.resource_eids.get(&key) else {
                     return Err(EvalError::Type);
                 };
-                stack.push(StackItem::Id(*id));
+                stack.push(StackItem::EntityId(*id));
                 pc = next;
             }
             Bytecode::LoadResourceAttrs => {
-                stack.push(StackItem::IdSet(&params.resource_attrs));
+                stack.push(StackItem::AttrIdSet(&params.resource_attrs));
             }
-            Bytecode::LoadConstId => {
+            Bytecode::LoadConstEntityId => {
                 let (id, next) = decode_id(pc)?;
-                stack.push(StackItem::Id(id));
+                stack.push(StackItem::EntityId(id));
+                pc = next;
+            }
+            Bytecode::LoadConstAttrId => {
+                let (id, next) = decode_id(pc)?;
+                stack.push(StackItem::AttrId(id));
                 pc = next;
             }
             Bytecode::IsEq => {
@@ -328,31 +331,40 @@ fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<bool, Eval
                     return Err(EvalError::Type);
                 };
                 let is_eq = match (a, b) {
-                    (StackItem::Id(a), StackItem::Id(b)) => a == b,
-                    (StackItem::IdSet(set), StackItem::Id(id)) => set.contains(&id),
-                    (StackItem::Id(id), StackItem::IdSet(set)) => set.contains(&id),
+                    (StackItem::AttrId(a), StackItem::AttrId(b)) => a == b,
+                    (StackItem::EntityId(a), StackItem::EntityId(b)) => a == b,
+                    (StackItem::AttrIdSet(set), StackItem::AttrId(id)) => set.contains(&id),
+                    (StackItem::AttrId(id), StackItem::AttrIdSet(set)) => set.contains(&id),
                     _ => false,
                 };
                 stack.push(StackItem::Uint(if is_eq { 1 } else { 0 }));
             }
             Bytecode::SupersetOf => {
-                let Some(StackItem::IdSet(a)) = stack.pop() else {
+                let Some(StackItem::AttrIdSet(a)) = stack.pop() else {
                     return Err(EvalError::Type);
                 };
-                let Some(StackItem::IdSet(b)) = stack.pop() else {
+                let Some(StackItem::AttrIdSet(b)) = stack.pop() else {
                     return Err(EvalError::Type);
                 };
                 stack.push(StackItem::Uint(if a.is_superset(b) { 1 } else { 0 }));
             }
             Bytecode::IdSetContains => {
-                let Some(StackItem::IdSet(set)) = stack.pop() else {
+                let Some(a) = stack.pop() else {
                     return Err(EvalError::Type);
                 };
-                let Some(StackItem::Id(arg)) = stack.pop() else {
+                let Some(b) = stack.pop() else {
                     return Err(EvalError::Type);
                 };
-                // BUG: Does not support u128
-                stack.push(StackItem::Uint(if set.contains(&arg) { 1 } else { 0 }));
+
+                match (a, b) {
+                    (StackItem::AttrIdSet(a), StackItem::AttrId(b)) => {
+                        // BUG: Does not support u128?
+                        stack.push(StackItem::Uint(if a.contains(&b) { 1 } else { 0 }));
+                    }
+                    _ => {
+                        return Err(EvalError::Type);
+                    }
+                }
             }
             Bytecode::And => {
                 let Some(StackItem::Uint(rhs)) = stack.pop() else {
@@ -390,8 +402,9 @@ fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<bool, Eval
     Err(EvalError::Program)
 }
 
-fn decode_id(buf: &[u8]) -> Result<(AnyId, &[u8]), EvalError> {
+#[inline]
+fn decode_id<K>(buf: &[u8]) -> Result<(Id128<K>, &[u8]), EvalError> {
     let (uint, next) = unsigned_varint::decode::u128(buf).map_err(|_| EvalError::Program)?;
 
-    Ok((AnyId::from_uint(uint), next))
+    Ok((Id128::from_uint(uint), next))
 }

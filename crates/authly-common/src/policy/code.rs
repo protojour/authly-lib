@@ -41,7 +41,8 @@ pub enum OpCode {
     LoadSubjectAttrs,
     LoadResourceId(u128),
     LoadResourceAttrs,
-    LoadConstId(u128),
+    LoadConstEntityId(u128),
+    LoadConstAttrId(u128),
     IsEq,
     SupersetOf,
     IdSetContains,
@@ -60,14 +61,15 @@ pub enum Bytecode {
     LoadSubjectAttrs = 1,
     LoadResourceId = 2,
     LoadResourceAttrs = 3,
-    LoadConstId = 4,
-    IsEq = 5,
-    SupersetOf = 6,
-    IdSetContains = 7,
-    And = 8,
-    Or = 9,
-    Not = 10,
-    Return = 11,
+    LoadConstAttrId = 4,
+    LoadConstEntityId = 5,
+    IsEq = 6,
+    SupersetOf = 7,
+    IdSetContains = 8,
+    And = 9,
+    Or = 10,
+    Not = 11,
+    Return = 12,
 }
 
 /// Convert slice of opcodes to bytecode.
@@ -90,8 +92,12 @@ pub fn to_bytecode(opcodes: &[OpCode]) -> Vec<u8> {
             OpCode::LoadResourceAttrs => {
                 out.push(Bytecode::LoadResourceAttrs as u8);
             }
-            OpCode::LoadConstId(id) => {
-                out.push(Bytecode::LoadConstId as u8);
+            OpCode::LoadConstEntityId(id) => {
+                out.push(Bytecode::LoadConstEntityId as u8);
+                out.extend(unsigned_varint::encode::u128(*id, &mut Default::default()));
+            }
+            OpCode::LoadConstAttrId(id) => {
+                out.push(Bytecode::LoadConstAttrId as u8);
                 out.extend(unsigned_varint::encode::u128(*id, &mut Default::default()));
             }
             OpCode::IsEq => {

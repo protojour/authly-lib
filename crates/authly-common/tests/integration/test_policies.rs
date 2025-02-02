@@ -1,31 +1,31 @@
 use authly_common::{
-    id::{AnyId, ObjId},
+    id::{AttrId, PolicyId},
     policy::{
         code::{to_bytecode, OpCode, PolicyValue},
         engine::{AccessControlParams, NoOpPolicyTracer, PolicyEngine},
     },
 };
 
-const POL_DENY_FALSE0: ObjId = ObjId::from_uint(0);
-const POL_DENY_FALSE1: ObjId = ObjId::from_uint(1);
-const POL_DENY_TRUE0: ObjId = ObjId::from_uint(2);
-const POL_DENY_TRUE1: ObjId = ObjId::from_uint(3);
-const POL_ALLOW_FALSE0: ObjId = ObjId::from_uint(4);
-const POL_ALLOW_FALSE1: ObjId = ObjId::from_uint(5);
-const POL_ALLOW_TRUE0: ObjId = ObjId::from_uint(6);
-const POL_ALLOW_TRUE1: ObjId = ObjId::from_uint(7);
+const POL_DENY_FALSE0: PolicyId = PolicyId::from_uint(0);
+const POL_DENY_FALSE1: PolicyId = PolicyId::from_uint(1);
+const POL_DENY_TRUE0: PolicyId = PolicyId::from_uint(2);
+const POL_DENY_TRUE1: PolicyId = PolicyId::from_uint(3);
+const POL_ALLOW_FALSE0: PolicyId = PolicyId::from_uint(4);
+const POL_ALLOW_FALSE1: PolicyId = PolicyId::from_uint(5);
+const POL_ALLOW_TRUE0: PolicyId = PolicyId::from_uint(6);
+const POL_ALLOW_TRUE1: PolicyId = PolicyId::from_uint(7);
 
-const FOO: AnyId = AnyId::from_uint(0);
-const BAR: AnyId = AnyId::from_uint(1);
-const BAZ: AnyId = AnyId::from_uint(2);
-const QUX: AnyId = AnyId::from_uint(3);
-const BOG: AnyId = AnyId::from_uint(4);
-const EXTRA: AnyId = AnyId::from_uint(42);
+const FOO: AttrId = AttrId::from_uint(0);
+const BAR: AttrId = AttrId::from_uint(1);
+const BAZ: AttrId = AttrId::from_uint(2);
+const QUX: AttrId = AttrId::from_uint(3);
+const BOG: AttrId = AttrId::from_uint(4);
+const EXTRA: AttrId = AttrId::from_uint(42);
 
 fn true_policy() -> Vec<u8> {
     to_bytecode(&[
-        OpCode::LoadConstId(0),
-        OpCode::LoadConstId(0),
+        OpCode::LoadConstAttrId(0),
+        OpCode::LoadConstAttrId(0),
         OpCode::IsEq,
         OpCode::Return,
     ])
@@ -33,8 +33,8 @@ fn true_policy() -> Vec<u8> {
 
 fn false_policy() -> Vec<u8> {
     to_bytecode(&[
-        OpCode::LoadConstId(0),
-        OpCode::LoadConstId(1),
+        OpCode::LoadConstAttrId(0),
+        OpCode::LoadConstAttrId(1),
         OpCode::IsEq,
         OpCode::Return,
     ])
@@ -54,7 +54,7 @@ fn test_engine_with_policies() -> PolicyEngine {
 }
 
 #[track_caller]
-fn eval_attrs(engine: &PolicyEngine, attrs: impl IntoIterator<Item = AnyId>) -> &'static str {
+fn eval_attrs(engine: &PolicyEngine, attrs: impl IntoIterator<Item = AttrId>) -> &'static str {
     match engine.eval(
         &AccessControlParams {
             resource_attrs: attrs.into_iter().collect(),
@@ -135,8 +135,8 @@ fn test_deny_class() {
 fn test_allow_deny_classes() {
     let mut e = test_engine_with_policies();
 
-    const NO: AnyId = AnyId::from_uint(100);
-    const YES: AnyId = AnyId::from_uint(200);
+    const NO: AttrId = AttrId::from_uint(100);
+    const YES: AttrId = AttrId::from_uint(200);
 
     // "NO" triggers, results in deny
     e.add_trigger([NO, FOO], [POL_ALLOW_TRUE0, POL_DENY_TRUE0]);
