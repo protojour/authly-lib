@@ -50,6 +50,8 @@ tonic-build = "0.12"
 
 [dev-dependencies]
 indoc = "2"
+test-log = { version = "0.2", features = ["trace"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = [] }
 
 [package.metadata.docs.rs]
 features = [

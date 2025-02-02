@@ -90,8 +90,8 @@ message AccessControlRequest {
     repeated bytes peer_entity_ids = 3;
 }
 
-// The outcome of an access control evaluation.
-enum AccessControlOutcome {
+// The value/outcome of an access control evaluation.
+enum AccessControlValue {
     // Access is denied.
     DENY = 0;
     // Access is allowed.
@@ -100,8 +100,8 @@ enum AccessControlOutcome {
 
 // The response of an access control evaluation.
 message AccessControlResponse {
-    // The outcome of the access control evaluation.
-    AccessControlOutcome outcome = 1;
+    // The value/outcome of the access control evaluation.
+    AccessControlValue value = 1;
 }
 
 // An X509 certificate signing request.
