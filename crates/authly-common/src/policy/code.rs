@@ -1,14 +1,36 @@
 //! Code definitions for the Authly policy engine.
 
 use int_enum::IntEnum;
+use serde::{Deserialize, Serialize};
 
-/// The outcome of a policy engine evaluation.
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum Outcome {
+/// The value/outcome of a policy engine evaluation.
+#[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash, Debug)]
+pub enum PolicyValue {
     /// Represents denied access.
     Deny,
     /// Represents allowed access.
     Allow,
+}
+
+impl PolicyValue {
+    /// Whether self is [Self::Deny],
+    pub fn is_deny(self) -> bool {
+        matches!(self, Self::Deny)
+    }
+
+    /// Whether self is [Self::Allow],
+    pub fn is_allow(self) -> bool {
+        matches!(self, Self::Allow)
+    }
+}
+
+impl From<bool> for PolicyValue {
+    fn from(value: bool) -> Self {
+        match value {
+            false => Self::Deny,
+            true => Self::Allow,
+        }
+    }
 }
 
 /// typed opcode representation for policy engine instructions.
@@ -26,10 +48,7 @@ pub enum OpCode {
     And,
     Or,
     Not,
-    TrueThenAllow,
-    TrueThenDeny,
-    FalseThenAllow,
-    FalseThenDeny,
+    Return,
 }
 
 /// bytecode representation for policy engine instructions.
@@ -48,10 +67,7 @@ pub enum Bytecode {
     And = 8,
     Or = 9,
     Not = 10,
-    TrueThenAllow = 11,
-    TrueThenDeny = 12,
-    FalseThenAllow = 13,
-    FalseThenDeny = 14,
+    Return = 11,
 }
 
 /// Convert slice of opcodes to bytecode.
@@ -96,17 +112,8 @@ pub fn to_bytecode(opcodes: &[OpCode]) -> Vec<u8> {
             OpCode::Not => {
                 out.push(Bytecode::Not as u8);
             }
-            OpCode::TrueThenAllow => {
-                out.push(Bytecode::TrueThenAllow as u8);
-            }
-            OpCode::TrueThenDeny => {
-                out.push(Bytecode::TrueThenDeny as u8);
-            }
-            OpCode::FalseThenAllow => {
-                out.push(Bytecode::FalseThenAllow as u8);
-            }
-            OpCode::FalseThenDeny => {
-                out.push(Bytecode::FalseThenDeny as u8);
+            OpCode::Return => {
+                out.push(Bytecode::Return as u8);
             }
         }
     }

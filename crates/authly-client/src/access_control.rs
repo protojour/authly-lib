@@ -123,7 +123,7 @@ impl<'c> AccessControlRequestBuilder<'c> {
             .map_err(error::tonic)?
             .into_inner();
 
-        Ok(access_control_response.outcome > 0)
+        Ok(access_control_response.value > 0)
     }
 }
 

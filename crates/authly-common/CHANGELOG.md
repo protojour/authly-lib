@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - namespace level added to property mapping protobuf.
 - decouple policies from services, introduce `domain` concept into document model.
+- improved implementation of policy engine with new logical model for policy combinations.
 
 ## [0.0.5] - 2025-01-30
 ### Changed

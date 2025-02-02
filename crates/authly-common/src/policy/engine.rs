@@ -7,10 +7,10 @@ use tracing::error;
 
 use crate::id::{AnyId, ObjId};
 
-use super::code::{Bytecode, Outcome};
+use super::code::{Bytecode, PolicyValue};
 
 /// Evaluation error.
-#[derive(Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum EvalError {
     /// Error in the program encoding
     Program,
@@ -47,25 +47,45 @@ pub struct AccessControlParams {
 pub struct PolicyEngine {
     policies: FnvHashMap<PolicyId, Policy>,
 
-    /// Policy triggers: The hash map is keyed by the smallest attribute in the match set
-    policy_triggers: FnvHashMap<AnyId, PolicyTrigger>,
+    /// The triggers in this map are keyed by the one of the
+    /// attributes that has to match the trigger.
+    trigger_groups: FnvHashMap<AnyId, Vec<PolicyTrigger>>,
 }
 
-/// The policy trigger maps a set of attributes to a policy.
+/// The policy trigger maps a set of attributes to a set of policies.
 #[derive(Debug)]
 struct PolicyTrigger {
     /// The set of attributes that has to match for this policy to trigger
     pub attr_matcher: BTreeSet<AnyId>,
 
     /// The policy which gets triggered by this attribute matcher
-    pub policy_id: PolicyId,
+    pub policy_ids: BTreeSet<PolicyId>,
 }
 
+/// A tracer used to collect debugging information from the policy engine
+#[allow(unused)]
+pub trait PolicyTracer {
+    /// Reports applicable policies of a specific class
+    fn report_applicable(&mut self, class: PolicyValue, policies: impl Iterator<Item = PolicyId>) {}
+
+    /// Report start of a policy evaluation
+    fn report_policy_eval_start(&mut self, policy_id: PolicyId) {}
+
+    /// Reports the value of policy after it has been evaluated
+    fn report_policy_eval_end(&mut self, value: bool) {}
+}
+
+/// A [PolicyTracer] that does nothing.
+pub struct NoOpPolicyTracer;
+
+impl PolicyTracer for NoOpPolicyTracer {}
+
 /// A placeholder for how to refer to a local policy
-type PolicyId = AnyId;
+type PolicyId = ObjId;
 
 #[derive(Debug)]
 struct Policy {
+    class: PolicyValue,
     bytecode: Vec<u8>,
 }
 
@@ -76,32 +96,35 @@ enum StackItem<'a> {
     Id(AnyId),
 }
 
-struct EvalCtx {
-    outcomes: Vec<Outcome>,
-    evaluated_policies: FnvHashSet<PolicyId>,
+#[derive(Debug)]
+struct EvalCtx<'e> {
+    applicable_allow: FnvHashMap<PolicyId, &'e Policy>,
+    applicable_deny: FnvHashMap<PolicyId, &'e Policy>,
 }
 
 impl PolicyEngine {
     /// Adds a new policy to the engine.
-    pub fn add_policy(&mut self, id: ObjId, policy_bytecode: Vec<u8>) {
-        self.policies.insert(
-            id.to_any(),
-            Policy {
-                bytecode: policy_bytecode,
-            },
-        );
+    pub fn add_policy(&mut self, id: ObjId, class: PolicyValue, bytecode: Vec<u8>) {
+        self.policies.insert(id, Policy { class, bytecode });
     }
 
     /// Adds a new policy trigger to the engine.
-    pub fn add_policy_trigger(&mut self, attr_matcher: BTreeSet<AnyId>, policy_id: ObjId) {
+    pub fn add_trigger(
+        &mut self,
+        attr_matcher: impl Into<BTreeSet<AnyId>>,
+        policy_ids: impl Into<BTreeSet<ObjId>>,
+    ) {
+        let attr_matcher = attr_matcher.into();
+        let policy_ids = policy_ids.into();
+
         if let Some(first_attr) = attr_matcher.iter().next() {
-            self.policy_triggers.insert(
-                first_attr.to_any(),
-                PolicyTrigger {
+            self.trigger_groups
+                .entry(first_attr.to_any())
+                .or_default()
+                .push(PolicyTrigger {
                     attr_matcher,
-                    policy_id: policy_id.to_any(),
-                },
-            );
+                    policy_ids,
+                });
         }
     }
 
@@ -112,114 +135,162 @@ impl PolicyEngine {
 
     /// Get the number of policy triggers currently in the engine.
     pub fn get_trigger_count(&self) -> usize {
-        self.policy_triggers.len()
+        self.trigger_groups.values().map(Vec::len).sum()
     }
 
     /// Perform an access control evalution of the given parameters within this engine.
-    pub fn eval(&self, params: &AccessControlParams) -> Result<Outcome, EvalError> {
+    pub fn eval(
+        &self,
+        params: &AccessControlParams,
+        tracer: &mut impl PolicyTracer,
+    ) -> Result<PolicyValue, EvalError> {
         let mut eval_ctx = EvalCtx {
-            outcomes: vec![],
-            evaluated_policies: Default::default(),
+            applicable_allow: Default::default(),
+            applicable_deny: Default::default(),
         };
 
         for attr in &params.subject_attrs {
-            self.eval_triggers(*attr, params, &mut eval_ctx)?;
+            self.collect_applicable(*attr, params, &mut eval_ctx)?;
         }
 
         for attr in &params.resource_attrs {
-            self.eval_triggers(*attr, params, &mut eval_ctx)?;
+            self.collect_applicable(*attr, params, &mut eval_ctx)?;
         }
 
-        if eval_ctx.outcomes.is_empty() {
-            // idea: Fallback mode, no policies matched
-            for subj_attr in &params.subject_attrs {
-                if params.resource_attrs.contains(subj_attr) {
-                    return Ok(Outcome::Allow);
-                }
-            }
-
-            Ok(Outcome::Deny)
-        } else if eval_ctx
-            .outcomes
-            .iter()
-            .any(|outcome| matches!(outcome, Outcome::Deny))
         {
-            Ok(Outcome::Deny)
-        } else {
-            Ok(Outcome::Allow)
+            tracer.report_applicable(PolicyValue::Deny, eval_ctx.applicable_deny.keys().copied());
+            tracer.report_applicable(
+                PolicyValue::Allow,
+                eval_ctx.applicable_allow.keys().copied(),
+            );
+        }
+
+        let has_allow = !eval_ctx.applicable_allow.is_empty();
+        let has_deny = !eval_ctx.applicable_deny.is_empty();
+
+        match (has_allow, has_deny) {
+            (false, false) => {
+                // idea: Fallback mode, no policies matched
+                for subj_attr in &params.subject_attrs {
+                    if params.resource_attrs.contains(subj_attr) {
+                        return Ok(PolicyValue::Allow);
+                    }
+                }
+
+                Ok(PolicyValue::Deny)
+            }
+            (true, false) => {
+                // starts in Deny state, try to prove Allow
+                let is_allow =
+                    eval_policies_disjunctive(eval_ctx.applicable_allow, params, tracer)?;
+                Ok(PolicyValue::from(is_allow))
+            }
+            (false, true) => {
+                // starts in Allow state, try to prove Deny
+                let is_deny = eval_policies_disjunctive(eval_ctx.applicable_deny, params, tracer)?;
+                Ok(PolicyValue::from(!is_deny))
+            }
+            (true, true) => {
+                // starts in Deny state, try to prove Allow
+                let is_allow =
+                    eval_policies_disjunctive(eval_ctx.applicable_allow, params, tracer)?;
+                if !is_allow {
+                    return Ok(PolicyValue::Deny);
+                }
+
+                // moved into in Allow state, try to prove Deny
+                let is_deny = eval_policies_disjunctive(eval_ctx.applicable_deny, params, tracer)?;
+                Ok(PolicyValue::from(!is_deny))
+            }
         }
     }
 
-    fn eval_triggers(
-        &self,
+    fn collect_applicable<'e>(
+        &'e self,
         attr: AnyId,
         params: &AccessControlParams,
-        eval_ctx: &mut EvalCtx,
+        eval_ctx: &mut EvalCtx<'e>,
     ) -> Result<(), EvalError> {
-        if let Some(policy_trigger) = self.policy_triggers.get(&attr) {
-            if eval_ctx
-                .evaluated_policies
-                .contains(&policy_trigger.policy_id)
-            {
-                // already evaluated
-                return Ok(());
-            }
+        // Find all potential triggers to investigate for this attribute
+        let Some(policy_triggers) = self.trigger_groups.get(&attr) else {
+            return Ok(());
+        };
 
-            let mut n_matches = 0;
+        for policy_trigger in policy_triggers {
+            if policy_trigger.attr_matcher.len() > 1 {
+                // a multi-attribute trigger: needs some post-processing
+                // to figure out if it applies
+                let mut matches: BTreeSet<AnyId> = Default::default();
 
-            for attrs in [&params.subject_attrs, &params.resource_attrs] {
-                for attr in attrs {
-                    if policy_trigger.attr_matcher.contains(attr) {
-                        n_matches += 1;
+                for attrs in [&params.subject_attrs, &params.resource_attrs] {
+                    for attr in attrs {
+                        if policy_trigger.attr_matcher.contains(attr) {
+                            matches.insert(*attr);
+                        }
                     }
+                }
+
+                if matches != policy_trigger.attr_matcher {
+                    // not applicable
+                    continue;
                 }
             }
 
-            if n_matches < policy_trigger.attr_matcher.len() {
-                // not a match; no policy evaluated
-                return Ok(());
+            // The trigger applies; register all its policies as applicable
+            for policy_id in policy_trigger.policy_ids.iter().copied() {
+                let Some(policy) = self.policies.get(&policy_id) else {
+                    error!(?policy_id, "policy is missing");
+
+                    // internal error, which is not exposed
+                    continue;
+                };
+
+                match policy.class {
+                    PolicyValue::Deny => {
+                        eval_ctx.applicable_deny.insert(policy_id, policy);
+                    }
+                    PolicyValue::Allow => {
+                        eval_ctx.applicable_allow.insert(policy_id, policy);
+                    }
+                }
             }
-
-            let policy_id = policy_trigger.policy_id;
-
-            let Some(policy) = self.policies.get(&policy_id) else {
-                error!(?policy_id, "policy is missing");
-
-                // internal error, which is not exposed
-                return Ok(());
-            };
-
-            // register this policy as evaluated, to avoid re-triggering
-            eval_ctx.evaluated_policies.insert(policy_trigger.policy_id);
-
-            // evaluate policy outcome
-            eval_ctx
-                .outcomes
-                .push(eval_policy(&policy.bytecode, params)?);
         }
 
         Ok(())
     }
 }
 
-fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<Outcome, EvalError> {
-    #[cfg(feature = "policy_debug")]
-    tracing::info!("eval_policy");
+/// Evaluate set of policies, map their outputs to a boolean value and return the OR function applied to those values.
+fn eval_policies_disjunctive(
+    map: FnvHashMap<PolicyId, &Policy>,
+    params: &AccessControlParams,
+    tracer: &mut impl PolicyTracer,
+) -> Result<bool, EvalError> {
+    for (policy_id, policy) in &map {
+        tracer.report_policy_eval_start(*policy_id);
 
+        let value = eval_policy(&policy.bytecode, params)?;
+
+        tracer.report_policy_eval_end(value);
+
+        if value {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+/// Evaluate one standalone policy on the given access control parameters
+fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<bool, EvalError> {
     let mut stack: Vec<StackItem> = Vec::with_capacity(16);
 
     while let Some(code) = pc.first() {
-        #[cfg(feature = "policy_debug")]
-        tracing::info!("    stack {stack:?}");
-
         pc = &pc[1..];
 
         let Ok(code) = Bytecode::try_from(*code) else {
             return Err(EvalError::Program);
         };
-
-        #[cfg(feature = "policy_debug")]
-        tracing::info!("  eval code {code:?}");
 
         match code {
             Bytecode::LoadSubjectId => {
@@ -307,42 +378,16 @@ fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<Outcome, E
                 };
                 stack.push(StackItem::Uint(if val > 0 { 0 } else { 1 }));
             }
-            Bytecode::TrueThenAllow => {
+            Bytecode::Return => {
                 let Some(StackItem::Uint(u)) = stack.pop() else {
                     return Err(EvalError::Type);
                 };
-                if u > 0 {
-                    return Ok(Outcome::Allow);
-                }
-            }
-            Bytecode::TrueThenDeny => {
-                let Some(StackItem::Uint(u)) = stack.pop() else {
-                    return Err(EvalError::Type);
-                };
-                if u > 0 {
-                    return Ok(Outcome::Deny);
-                }
-            }
-            Bytecode::FalseThenAllow => {
-                let Some(StackItem::Uint(u)) = stack.pop() else {
-                    return Err(EvalError::Type);
-                };
-                if u == 0 {
-                    return Ok(Outcome::Allow);
-                }
-            }
-            Bytecode::FalseThenDeny => {
-                let Some(StackItem::Uint(u)) = stack.pop() else {
-                    return Err(EvalError::Type);
-                };
-                if u == 0 {
-                    return Ok(Outcome::Deny);
-                }
+                return Ok(u > 0);
             }
         }
     }
 
-    Ok(Outcome::Deny)
+    Err(EvalError::Program)
 }
 
 fn decode_id(buf: &[u8]) -> Result<(AnyId, &[u8]), EvalError> {
