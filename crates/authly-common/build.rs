@@ -3,9 +3,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .protoc_arg("--experimental_allow_proto3_optional")
         .compile_protos(
             &[
-                "proto/authly_connect.proto",
-                "proto/authly_mandate_submission.proto",
-                "proto/authly_service.proto",
+                "proto/authly/connect.proto",
+                "proto/authly/mandate_submission.proto",
+                "proto/authly/service.proto",
             ],
             &["proto/"],
         )?;

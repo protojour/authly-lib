@@ -10,6 +10,7 @@ pub use builder::ClientBuilder;
 use builder::ConnectionParamsBuilder;
 use connection::{Connection, ConnectionParams, ReconfigureStrategy};
 pub use error::Error;
+use metadata::{NamespaceMetadata, ServiceMetadata};
 use rcgen::{CertificateParams, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose};
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 pub use token::AccessToken;
@@ -23,18 +24,18 @@ use anyhow::anyhow;
 use authly_common::{
     access_token::AuthlyAccessTokenClaims,
     id::Eid,
-    proto::service::{self as proto, authly_service_client::AuthlyServiceClient},
+    proto::{
+        proto_struct_to_json,
+        service::{self as proto, authly_service_client::AuthlyServiceClient},
+    },
 };
 use http::header::COOKIE;
 use tonic::{transport::Channel, Request};
 
-/// Client identity.
-pub mod identity;
-
-/// Token utilities.
-pub mod token;
-
 pub mod access_control;
+pub mod identity;
+pub mod metadata;
+pub mod token;
 
 mod background_worker;
 mod builder;
@@ -100,28 +101,27 @@ impl Client {
         }
     }
 
-    /// The eid of this client.
-    pub async fn entity_id(&self) -> Result<Eid, Error> {
-        let metadata = self
+    /// Retrieve the [ServiceMetadata] about service this client identifies as.
+    pub async fn metadata(&self) -> Result<ServiceMetadata, Error> {
+        let proto = self
             .current_service()
             .get_metadata(proto::Empty::default())
             .await
             .map_err(error::tonic)?
             .into_inner();
 
-        Eid::from_raw_bytes(&metadata.entity_id).ok_or_else(id_codec_error)
-    }
-
-    /// The name of this client.
-    pub async fn label(&self) -> Result<String, Error> {
-        let metadata = self
-            .current_service()
-            .get_metadata(proto::Empty::default())
-            .await
-            .map_err(error::tonic)?
-            .into_inner();
-
-        Ok(metadata.label)
+        Ok(ServiceMetadata {
+            entity_id: Eid::from_raw_bytes(&proto.entity_id).ok_or_else(id_codec_error)?,
+            label: proto.label,
+            namespaces: proto
+                .namespaces
+                .into_iter()
+                .map(|proto| NamespaceMetadata {
+                    label: proto.label,
+                    metadata: proto.metadata.map(proto_struct_to_json),
+                })
+                .collect(),
+        })
     }
 
     /// Make a new access control request, returning a builder for building it.

@@ -1,5 +1,5 @@
 syntax = "proto3";
-package authly_mandate_submission;
+package authly.mandate_submission;
 
 // Authly Mandate Submission protocol.
 //

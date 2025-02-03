@@ -1,3 +1,5 @@
+//! Client identity, in the TLS sense.
+
 use std::borrow::Cow;
 
 use pem::{EncodeConfig, Pem};

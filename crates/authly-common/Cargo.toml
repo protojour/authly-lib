@@ -33,6 +33,7 @@ http = { version = "1", optional = true }
 hyper = { version = "1", optional = true, default-features = false }
 int-enum = "1"
 prost = "0.13"
+prost-types = "0.13"
 rand = "0.8"
 rustls = { version = "0.23", optional = true, default-features = false }
 serde = { version = "1", features = ["derive"] }

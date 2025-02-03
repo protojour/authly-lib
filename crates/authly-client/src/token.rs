@@ -1,3 +1,5 @@
+//! Token utilities.
+
 use authly_common::access_token::AuthlyAccessTokenClaims;
 
 /// A verified access token, both in encoded and decoded format.
