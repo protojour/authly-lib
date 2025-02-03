@@ -1,4 +1,5 @@
 use authly_common::document::Document;
+use serde_json::json;
 
 const ENTITY: &str = r#"
 [authly-document]
@@ -88,6 +89,20 @@ KEY0 = "value0"
 KEY1 = "value1"
 "#;
 
+const METADATA: &str = r#"
+[authly-document]
+id = "d783648f-e6ac-4492-87f7-43d5e5805d60"
+
+[[service-entity]]
+eid = "e.2671d2a0bc3545e69fc666130254f8e9"
+label = "testservice"
+metadata = { description = "just for testing" }
+
+[[domain]]
+label = "test"
+metadata = { description = "just for testing" }
+"#;
+
 #[test]
 fn test_entity() {
     let toml = ENTITY;
@@ -119,4 +134,17 @@ fn settings_example() {
 
     assert_eq!(&toml[key0.span()], "KEY0");
     assert_eq!(&toml[value0.span()], "\"value0\"");
+}
+
+#[test]
+fn metadata_example() {
+    let toml = METADATA;
+    let document = Document::from_toml(toml).unwrap();
+
+    let domain = document.domain.into_iter().next().unwrap();
+    let metadata = domain.metadata.unwrap();
+    assert_eq!(
+        json!({ "description": "just for testing" }),
+        serde_json::Value::Object(metadata.into_inner())
+    );
 }

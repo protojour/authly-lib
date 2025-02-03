@@ -66,6 +66,9 @@ pub struct AuthlyDocument {
     pub id: Spanned<Uuid>,
 }
 
+/// Represents information that is dynamic and untyped in this document specification.
+pub type DynamicObject = serde_json::Map<String, serde_json::Value>;
+
 /// An entity definition
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -76,6 +79,11 @@ pub struct Entity {
     /// A label for the entity visible in the document namespace.
     #[serde(default)]
     pub label: Option<Spanned<String>>,
+
+    /// Metadata about this entity.
+    /// The metadata is not used by authly itself, but can be used by services which have read access to the entity.
+    #[serde(default)]
+    pub metadata: Option<Spanned<DynamicObject>>,
 
     /// Attributes bound to the entity.
     #[serde(default)]
@@ -104,6 +112,11 @@ pub struct Entity {
 pub struct Domain {
     /// A label for the entity visible in the document namespace.
     pub label: Spanned<String>,
+
+    /// Metadata about this domain.
+    /// The metadata is not used by authly itself, but can be read and used by services.
+    #[serde(default)]
+    pub metadata: Option<Spanned<DynamicObject>>,
 }
 
 /// An association of a service and a domain the service can use.
