@@ -42,8 +42,8 @@ pub struct Document {
     #[serde(default)]
     pub members: Vec<Members>,
 
-    #[serde(default, rename = "entity-attribute-binding")]
-    pub entity_attribute_binding: Vec<EntityAttributeBinding>,
+    #[serde(default, rename = "entity-attribute-assignment")]
+    pub entity_attribute_assignment: Vec<EntityAttributeAssignment>,
 
     #[serde(default, rename = "entity-property")]
     pub entity_property: Vec<EntityProperty>,
@@ -156,9 +156,8 @@ pub struct Members {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EntityProperty {
-    /// The label of the domain which defines this entity property.
-    #[serde(default)]
-    pub domain: Option<Spanned<String>>,
+    /// The label of the namespace this property is defined inside.
+    pub namespace: Spanned<String>,
 
     /// The property label.
     pub label: Spanned<String>,
@@ -183,8 +182,8 @@ pub struct KubernetesAccount {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResourceProperty {
-    /// The label of the domain which defines this resource property.
-    pub domain: Spanned<String>,
+    /// The label of the namespace this property is defined inside.
+    pub namespace: Spanned<String>,
 
     /// The property label.
     pub label: Spanned<String>,
@@ -224,12 +223,9 @@ pub struct PolicyBinding {
 
 /// An entity attribute binding, which assigns attributes to entities.
 #[derive(Deserialize)]
-pub struct EntityAttributeBinding {
-    /// The id identifying the entity
-    pub eid: Option<Spanned<Eid>>,
-
-    /// A label identifying the entity
-    pub label: Option<Spanned<String>>,
+pub struct EntityAttributeAssignment {
+    /// An Entity ID or label identifying the entity to assign to.
+    pub entity: Spanned<String>,
 
     /// The attributes assigned to the entity.
     pub attributes: Vec<Spanned<QualifiedAttributeName>>,
