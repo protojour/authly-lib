@@ -25,36 +25,36 @@ attributes = ["authly:role:authenticate", "authly:role:get_access_token"]
 kubernetes-account = { name = "testservice", namespace = "authly-test" }
 
 [[entity-property]]
-domain = "testservice"
+namespace = "testservice"
 label = "role"
 attributes = ["ui/user", "ui/admin"]
 
-[[entity-attribute-binding]]
-eid = "e.7d8b18fa5836487592a43eacea830b47"
+[[entity-attribute-assignment]]
+entity = "e.7d8b18fa5836487592a43eacea830b47"
 attributes = ["testservice:role:ui/user"]
 
 [[resource-property]]
-domain = "testservice"
+namespace = "testservice"
 label = "name"
 attributes = ["ontology", "storage"]
 
 [[resource-property]]
-domain = "testservice"
+namespace = "testservice"
 label = "ontology/action"
 attributes = ["read", "deploy", "stop"]
 
 [[resource-property]]
-domain = "testservice"
+namespace = "testservice"
 label = "buckets/action"
 attributes = ["read"]
 
 [[resource-property]]
-domain = "testservice"
+namespace = "testservice"
 label = "bucket/action"
 attributes = ["read", "create", "delete"]
 
 [[resource-property]]
-domain = "testservice"
+namespace = "testservice"
 label = "object/action"
 attributes = ["read", "create", "delete"]
 
