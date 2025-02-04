@@ -1,6 +1,6 @@
 [package]
 name = "authly-common"
-version = "0.0.5"
+version = "0.0.6"
 description = "Authly common datatypes and algorithms"
 authors.workspace = true
 edition.workspace = true
