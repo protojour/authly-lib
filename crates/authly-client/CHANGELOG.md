@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Changed
 - Namespaces ("domains") added to access control API
+- Service metadata redesigned and moved to separate module.
 
 ## [0.0.5] - 2025-01-30
 ### Added

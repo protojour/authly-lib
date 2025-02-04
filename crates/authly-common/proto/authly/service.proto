@@ -1,5 +1,7 @@
 syntax = "proto3";
-package authly_service;
+package authly.service;
+
+import "google/protobuf/struct.proto";
 
 service AuthlyService {
     // Fetch metadata about the service using this API.
@@ -33,7 +35,24 @@ message ServiceMetadata {
 
     // The label given to this service.
     string label = 2;
+
+    // The namespaces available to this service.
+    repeated NamespaceMetadata namespaces = 3;
 }
+
+// Metadata about a namespace.
+message NamespaceMetadata {
+    // The Authly ID of this namespace.
+    bytes namespace_id = 1;
+
+    // The label given to this namespace.
+    string label = 2;
+
+    // Metadata stored in Authly about this namespace.
+    google.protobuf.Struct metadata = 3;
+}
+
+// Metadata about a service namespace.
 
 // An access token response.
 message AccessToken {
