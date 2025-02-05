@@ -235,7 +235,7 @@ impl Client {
     /// Convert a clone of self into a dynamically dispatched access control object.
     ///
     /// This can be useful in tests where access control needs to be mocked out.
-    pub fn into_dyn_access_control(self) -> Box<dyn AccessControl> {
+    pub fn into_dyn_access_control(self) -> Box<dyn AccessControl + Send + Sync + 'static> {
         Box::new(self)
     }
 
