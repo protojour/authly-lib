@@ -235,8 +235,8 @@ impl Client {
     /// Convert a clone of self into a dynamically dispatched access control object.
     ///
     /// This can be useful in tests where access control needs to be mocked out.
-    pub fn into_dyn_access_control(self) -> Box<dyn AccessControl + Send + Sync + 'static> {
-        Box::new(self)
+    pub fn into_dyn_access_control(self) -> Arc<dyn AccessControl + Send + Sync + 'static> {
+        Arc::new(self)
     }
 
     /// Return a stream of [rustls::ServerConfig] values for configuring authly-verified servers.
