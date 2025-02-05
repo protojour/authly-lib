@@ -39,7 +39,18 @@ pub struct AccessControlRequestBuilder<'c> {
     peer_entity_ids: FnvHashSet<Eid>,
 }
 
-impl AccessControlRequestBuilder<'_> {
+impl<'c> AccessControlRequestBuilder<'c> {
+    /// Create a new builder with the given [AccessControl] backend.
+    pub fn new(access_control: &'c dyn AccessControl) -> Self {
+        Self {
+            access_control,
+            property_mapping: Default::default(),
+            access_token: None,
+            resource_attributes: Default::default(),
+            peer_entity_ids: Default::default(),
+        }
+    }
+
     /// Define a labelled resource attribute to be included in the access control request.
     ///
     /// The property and attribute labels should be available to this service through authly document manifests.
@@ -128,13 +139,9 @@ pub(crate) async fn get_resource_property_mapping(
 
 impl AccessControl for Client {
     fn access_control_request(&self) -> AccessControlRequestBuilder<'_> {
-        AccessControlRequestBuilder {
-            access_control: self,
-            property_mapping: self.state.resource_property_mapping.load_full(),
-            access_token: None,
-            resource_attributes: Default::default(),
-            peer_entity_ids: Default::default(),
-        }
+        let mut builder = AccessControlRequestBuilder::new(self);
+        builder.property_mapping = self.state.resource_property_mapping.load_full();
+        builder
     }
 
     fn evaluate(
