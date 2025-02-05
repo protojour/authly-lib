@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub use access_control::AccessControl;
 pub use authly_common::service::NamespacePropertyMapping;
 pub use builder::ClientBuilder;
 use builder::ConnectionParamsBuilder;
@@ -15,7 +16,6 @@ use rcgen::{CertificateParams, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsag
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 pub use token::AccessToken;
 
-use access_control::AccessControlRequestBuilder;
 use arc_swap::ArcSwap;
 
 use std::{borrow::Cow, sync::Arc};
@@ -124,11 +124,6 @@ impl Client {
         })
     }
 
-    /// Make a new access control request, returning a builder for building it.
-    pub fn access_control_request(&self) -> AccessControlRequestBuilder<'_> {
-        AccessControlRequestBuilder::new(self)
-    }
-
     /// Get the current resource properties of this service, in the form of a [PropertyMapping].
     pub fn get_resource_property_mapping(&self) -> Arc<NamespacePropertyMapping> {
         self.state.resource_property_mapping.load_full()
@@ -235,6 +230,13 @@ impl Client {
         })?;
 
         Ok((certificate, private_key))
+    }
+
+    /// Convert a clone of self into a dynamically dispatched access control object.
+    ///
+    /// This can be useful in tests where access control needs to be mocked out.
+    pub fn into_dyn_access_control(self) -> Box<dyn AccessControl> {
+        Box::new(self)
     }
 
     /// Return a stream of [rustls::ServerConfig] values for configuring authly-verified servers.

@@ -1,6 +1,6 @@
 //! Access control functionality.
 
-use std::sync::Arc;
+use std::{future::Future, pin::Pin, sync::Arc};
 
 use authly_common::{
     id::{AttrId, Eid},
@@ -13,6 +13,18 @@ use tonic::{transport::Channel, Request};
 
 use crate::{error, id_codec_error, token::AccessToken, Client, Error};
 
+/// Trait for initiating an access control request
+pub trait AccessControl {
+    /// Make a new access control request, returning a builder for building it.
+    fn access_control_request(&self) -> AccessControlRequestBuilder<'_>;
+
+    /// Evaluate the access control request.
+    fn evaluate(
+        &self,
+        builder: AccessControlRequestBuilder<'_>,
+    ) -> Pin<Box<dyn Future<Output = Result<bool, Error>> + '_>>;
+}
+
 /// A builder for making an access control request.
 ///
 // TODO: Include peer service(s) in the access control request.
@@ -20,24 +32,14 @@ use crate::{error, id_codec_error, token::AccessToken, Client, Error};
 // 1. The service verifies each incoming peer with a call to authly, to retrieve entity attributes.
 // 2. The service is conscious about its mesh, and is allowed to keep an in-memory map of incoming service entity attributes.
 pub struct AccessControlRequestBuilder<'c> {
-    client: &'c Client,
+    access_control: &'c dyn AccessControl,
     property_mapping: Arc<NamespacePropertyMapping>,
     access_token: Option<Arc<AccessToken>>,
     resource_attributes: FnvHashSet<AttrId>,
     peer_entity_ids: FnvHashSet<Eid>,
 }
 
-impl<'c> AccessControlRequestBuilder<'c> {
-    pub(crate) fn new(client: &'c Client) -> Self {
-        Self {
-            client,
-            property_mapping: client.state.resource_property_mapping.load_full(),
-            access_token: None,
-            resource_attributes: Default::default(),
-            peer_entity_ids: Default::default(),
-        }
-    }
-
+impl AccessControlRequestBuilder<'_> {
     /// Define a labelled resource attribute to be included in the access control request.
     ///
     /// The property and attribute labels should be available to this service through authly document manifests.
@@ -53,7 +55,7 @@ impl<'c> AccessControlRequestBuilder<'c> {
     /// client.access_control_request()
     ///     .resource_attribute("my_namespace", "type", "orders")?
     ///     .resource_attribute("my_namespace", "action", "read")?
-    ///     .send()
+    ///     .evaluate()
     ///     .await?;
     ///
     /// # Ok(())
@@ -88,42 +90,11 @@ impl<'c> AccessControlRequestBuilder<'c> {
         self
     }
 
-    /// Send the access control request to the remote Authly service for evaluation.
+    /// Evaluate the access control request.
     ///
     /// The return value represents whether access was granted.
-    pub async fn send(self) -> Result<bool, Error> {
-        let mut request = Request::new(proto::AccessControlRequest {
-            resource_attributes: self
-                .resource_attributes
-                .into_iter()
-                .map(|attr| attr.to_raw_array().to_vec())
-                .collect(),
-            // Peer entity attributes are currently not known to the service:
-            peer_entity_attributes: vec![],
-            peer_entity_ids: self
-                .peer_entity_ids
-                .into_iter()
-                .map(|eid| eid.to_raw_array().to_vec())
-                .collect(),
-        });
-        if let Some(access_token) = self.access_token {
-            request.metadata_mut().append(
-                AUTHORIZATION.as_str(),
-                format!("Bearer {}", access_token.token)
-                    .parse()
-                    .map_err(error::unclassified)?,
-            );
-        }
-
-        let access_control_response = self
-            .client
-            .current_service()
-            .access_control(request)
-            .await
-            .map_err(error::tonic)?
-            .into_inner();
-
-        Ok(access_control_response.value > 0)
+    pub async fn evaluate(self) -> Result<bool, Error> {
+        self.access_control.evaluate(self).await
     }
 }
 
@@ -153,4 +124,55 @@ pub(crate) async fn get_resource_property_mapping(
     }
 
     Ok(Arc::new(property_mapping))
+}
+
+impl AccessControl for Client {
+    fn access_control_request(&self) -> AccessControlRequestBuilder<'_> {
+        AccessControlRequestBuilder {
+            access_control: self,
+            property_mapping: self.state.resource_property_mapping.load_full(),
+            access_token: None,
+            resource_attributes: Default::default(),
+            peer_entity_ids: Default::default(),
+        }
+    }
+
+    fn evaluate(
+        &self,
+        builder: AccessControlRequestBuilder<'_>,
+    ) -> Pin<Box<dyn Future<Output = Result<bool, Error>> + '_>> {
+        Box::pin(async move {
+            let mut request = Request::new(proto::AccessControlRequest {
+                resource_attributes: builder
+                    .resource_attributes
+                    .into_iter()
+                    .map(|attr| attr.to_raw_array().to_vec())
+                    .collect(),
+                // Peer entity attributes are currently not known to the service:
+                peer_entity_attributes: vec![],
+                peer_entity_ids: builder
+                    .peer_entity_ids
+                    .into_iter()
+                    .map(|eid| eid.to_raw_array().to_vec())
+                    .collect(),
+            });
+            if let Some(access_token) = builder.access_token {
+                request.metadata_mut().append(
+                    AUTHORIZATION.as_str(),
+                    format!("Bearer {}", access_token.token)
+                        .parse()
+                        .map_err(error::unclassified)?,
+                );
+            }
+
+            let access_control_response = self
+                .current_service()
+                .access_control(request)
+                .await
+                .map_err(error::tonic)?
+                .into_inner();
+
+            Ok(access_control_response.value > 0)
+        })
+    }
 }

@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Changed
+- Make access control test-friendly with dynamically-dispatched `AccessControl` trait.
+
+## [0.0.6] - 2025-02-04
+### Changed
 - Namespaces ("domains") added to access control API
 - Service metadata redesigned and moved to separate module.
 
