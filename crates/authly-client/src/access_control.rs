@@ -104,6 +104,11 @@ impl<'c> AccessControlRequestBuilder<'c> {
         self
     }
 
+    /// Get an iterator over the current resource attributes.
+    pub fn resource_attributes(&self) -> impl Iterator<Item = AttrId> + use<'_> {
+        self.resource_attributes.iter().copied()
+    }
+
     /// Evaluate the access control request.
     ///
     /// The return value represents whether access was granted.
