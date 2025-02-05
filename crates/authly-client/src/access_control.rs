@@ -32,7 +32,7 @@ pub trait AccessControl {
 // 1. The service verifies each incoming peer with a call to authly, to retrieve entity attributes.
 // 2. The service is conscious about its mesh, and is allowed to keep an in-memory map of incoming service entity attributes.
 pub struct AccessControlRequestBuilder<'c> {
-    access_control: &'c dyn AccessControl,
+    access_control: &'c (dyn AccessControl + Send),
     property_mapping: Arc<NamespacePropertyMapping>,
     access_token: Option<Arc<AccessToken>>,
     resource_attributes: FnvHashSet<AttrId>,
@@ -42,7 +42,7 @@ pub struct AccessControlRequestBuilder<'c> {
 impl<'c> AccessControlRequestBuilder<'c> {
     /// Create a new builder with the given [AccessControl] backend.
     pub fn new(
-        access_control: &'c dyn AccessControl,
+        access_control: &'c (dyn AccessControl + Send),
         property_mapping: Arc<NamespacePropertyMapping>,
     ) -> Self {
         Self {
