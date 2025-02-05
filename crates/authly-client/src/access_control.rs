@@ -5,7 +5,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use authly_common::{
     id::{AttrId, Eid},
     proto::service::{self as proto, authly_service_client::AuthlyServiceClient},
-    service::NamespacePropertyMapping,
+    service::{NamespacePropertyMapping, NamespacedPropertyAttribute},
 };
 use fnv::FnvHashSet;
 use http::header::AUTHORIZATION;
@@ -67,8 +67,8 @@ impl<'c> AccessControlRequestBuilder<'c> {
     /// let client = Client::builder().connect().await?;
     ///
     /// client.access_control_request()
-    ///     .resource_attribute("my_namespace", "type", "orders")?
-    ///     .resource_attribute("my_namespace", "action", "read")?
+    ///     .resource_attribute(("my_namespace", "type", "orders"))?
+    ///     .resource_attribute(("my_namespace", "action", "read"))?
     ///     .evaluate()
     ///     .await?;
     ///
@@ -77,13 +77,11 @@ impl<'c> AccessControlRequestBuilder<'c> {
     /// ```
     pub fn resource_attribute(
         mut self,
-        namespace_label: &str,
-        property_label: &str,
-        attribute_label: &str,
+        attr: impl NamespacedPropertyAttribute,
     ) -> Result<Self, Error> {
         let attr_id = self
             .property_mapping
-            .attribute_object_id(namespace_label, property_label, attribute_label)
+            .attribute_object_id(attr)
             .ok_or(Error::InvalidPropertyAttributeLabel)?;
 
         self.resource_attributes.insert(attr_id);

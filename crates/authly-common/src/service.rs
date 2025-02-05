@@ -24,6 +24,32 @@ pub struct AttributeMappings {
     attributes: HashMap<String, AttrId>,
 }
 
+/// A trait describing a namespaced attribute.
+pub trait NamespacedPropertyAttribute {
+    /// The namespace label of the attribute
+    fn namespace(&self) -> &str;
+
+    /// The property label of the attribute
+    fn property(&self) -> &str;
+
+    /// The attribute of the namespaced property
+    fn attribute(&self) -> &str;
+}
+
+impl<'a> NamespacedPropertyAttribute for (&'a str, &'a str, &'a str) {
+    fn namespace(&self) -> &str {
+        self.0
+    }
+
+    fn property(&self) -> &str {
+        self.1
+    }
+
+    fn attribute(&self) -> &str {
+        self.2
+    }
+}
+
 impl NamespacePropertyMapping {
     /// Get a mutable reference to the namespace
     pub fn namespace_mut(&mut self, namespace_label: String) -> &mut PropertyMappings {
@@ -31,18 +57,13 @@ impl NamespacePropertyMapping {
     }
 
     /// Get the object ID of a single property/attribute label pair, if found.
-    pub fn attribute_object_id(
-        &self,
-        namespace_label: &str,
-        property_label: &str,
-        attribute_label: &str,
-    ) -> Option<AttrId> {
+    pub fn attribute_object_id(&self, attr: impl NamespacedPropertyAttribute) -> Option<AttrId> {
         self.namespaces
-            .get(namespace_label)?
+            .get(attr.namespace())?
             .properties
-            .get(property_label)?
+            .get(attr.property())?
             .attributes
-            .get(attribute_label)
+            .get(attr.attribute())
             .cloned()
     }
 

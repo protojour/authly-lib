@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Changed
 - Make access control test-friendly with dynamically-dispatched `AccessControl` trait.
+- `NamespacedPropertyAttribute` trait for making less verbose access control requests.
 
 ## [0.0.6] - 2025-02-04
 ### Changed
