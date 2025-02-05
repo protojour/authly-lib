@@ -22,7 +22,7 @@ pub trait AccessControl {
     fn evaluate(
         &self,
         builder: AccessControlRequestBuilder<'_>,
-    ) -> Pin<Box<dyn Future<Output = Result<bool, Error>> + '_>>;
+    ) -> Pin<Box<dyn Future<Output = Result<bool, Error>> + Send + '_>>;
 }
 
 /// A builder for making an access control request.
@@ -153,7 +153,7 @@ impl AccessControl for Client {
     fn evaluate(
         &self,
         builder: AccessControlRequestBuilder<'_>,
-    ) -> Pin<Box<dyn Future<Output = Result<bool, Error>> + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<bool, Error>> + Send + '_>> {
         Box::pin(async move {
             let mut request = Request::new(proto::AccessControlRequest {
                 resource_attributes: builder
