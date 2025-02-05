@@ -107,6 +107,15 @@ impl<'c> AccessControlRequestBuilder<'c> {
         self.resource_attributes.iter().copied()
     }
 
+    /// Enforce the access control request.
+    pub async fn enforce(self) -> Result<(), Error> {
+        if self.access_control.evaluate(self).await? {
+            Ok(())
+        } else {
+            Err(Error::AccessDenied)
+        }
+    }
+
     /// Evaluate the access control request.
     ///
     /// The return value represents whether access was granted.

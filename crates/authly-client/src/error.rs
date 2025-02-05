@@ -54,6 +54,10 @@ pub enum Error {
     #[error("invalid property/attribute label")]
     InvalidPropertyAttributeLabel,
 
+    /// Access control enforcement has resulted in "deny".
+    #[error("access denied")]
+    AccessDenied,
+
     /// Other type of unclassified error.
     #[error("unclassified error: {0}")]
     Unclassified(anyhow::Error),
