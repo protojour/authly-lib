@@ -50,8 +50,8 @@ pub enum Error {
     #[error("encoding error: {0}")]
     Codec(anyhow::Error),
 
-    /// Invalid property/attribute label
-    #[error("invalid property/attribute label")]
+    /// Invalid namespace/property/attribute label
+    #[error("invalid namespace/property/attribute label")]
     InvalidPropertyAttributeLabel,
 
     /// Access control enforcement has resulted in "deny".

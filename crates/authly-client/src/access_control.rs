@@ -10,6 +10,7 @@ use authly_common::{
 use fnv::FnvHashSet;
 use http::header::AUTHORIZATION;
 use tonic::{transport::Channel, Request};
+use tracing::debug;
 
 use crate::{error, id_codec_error, token::AccessToken, Client, Error};
 
@@ -79,10 +80,15 @@ impl<'c> AccessControlRequestBuilder<'c> {
         mut self,
         attr: impl NamespacedPropertyAttribute,
     ) -> Result<Self, Error> {
-        let attr_id = self
-            .property_mapping
-            .attribute_object_id(attr)
-            .ok_or(Error::InvalidPropertyAttributeLabel)?;
+        let attr_id = self.property_mapping.attribute_id(&attr).ok_or_else(|| {
+            debug!(
+                "invalid namespace/property/attribute label: {}/{}/{}",
+                attr.namespace(),
+                attr.property(),
+                attr.attribute(),
+            );
+            Error::InvalidPropertyAttributeLabel
+        })?;
 
         self.resource_attributes.insert(attr_id);
         Ok(self)

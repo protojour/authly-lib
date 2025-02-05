@@ -56,8 +56,8 @@ impl NamespacePropertyMapping {
         self.namespaces.entry(namespace_label).or_default()
     }
 
-    /// Get the object ID of a single property/attribute label pair, if found.
-    pub fn attribute_object_id(&self, attr: impl NamespacedPropertyAttribute) -> Option<AttrId> {
+    /// Get the object ID of a single namespace/property/attribute label triple, if found.
+    pub fn attribute_id(&self, attr: &impl NamespacedPropertyAttribute) -> Option<AttrId> {
         self.namespaces
             .get(attr.namespace())?
             .properties
