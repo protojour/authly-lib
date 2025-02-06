@@ -61,7 +61,18 @@ impl Identity {
         })
     }
 
-    pub(crate) fn to_pem(&self) -> Result<Cow<[u8]>, Error> {
+    /// Get the PEM encoded certificate.
+    pub fn cert_pem(&self) -> Cow<[u8]> {
+        self.cert_pem.as_slice().into()
+    }
+
+    /// Get the PEM encoded private key.
+    pub fn key_pem(&self) -> Cow<[u8]> {
+        self.key_pem.as_slice().into()
+    }
+
+    /// Get a PEM containing both the certificate and the private key.
+    pub fn pem(&self) -> Result<Cow<[u8]>, Error> {
         let mut identity_pem = self.cert_pem.clone();
         identity_pem.extend(&self.key_pem);
         Ok(Cow::Owned(identity_pem))

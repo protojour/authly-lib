@@ -379,7 +379,7 @@ impl Client {
                         .map_err(|_| Error::AuthlyCA("unable to parse"))?,
                 )
                 .identity(
-                    reqwest::Identity::from_pem(params.identity.to_pem()?.as_ref())
+                    reqwest::Identity::from_pem(params.identity.pem()?.as_ref())
                         .map_err(|_| Error::Identity("unable to parse"))?,
                 ))
         }

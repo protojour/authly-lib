@@ -68,7 +68,7 @@ impl ClientBuilder {
             .identity
             .as_ref()
             .ok_or_else(|| Error::Identity("unconfigured"))?
-            .to_pem()
+            .pem()
     }
 
     /// Connect to Authly
