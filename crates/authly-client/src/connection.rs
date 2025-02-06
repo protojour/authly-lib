@@ -1,3 +1,5 @@
+//! Code related to the connection to Authly.
+
 use std::{borrow::Cow, sync::Arc};
 
 use authly_common::proto::service::authly_service_client::AuthlyServiceClient;
@@ -9,6 +11,28 @@ use crate::{
     identity::Identity,
     Error,
 };
+
+/// The parameters used to establish a connection to Authly.
+#[derive(Clone)]
+pub struct ConnectionParams {
+    pub(crate) inference: Inference,
+    pub(crate) url: Cow<'static, str>,
+    pub(crate) authly_local_ca: Vec<u8>,
+    pub(crate) identity: Identity,
+    pub(crate) jwt_decoding_key: jsonwebtoken::DecodingKey,
+}
+
+impl ConnectionParams {
+    /// Gets the current Authly root CA.
+    pub fn ca_pem(&self) -> &[u8] {
+        &self.authly_local_ca
+    }
+
+    /// Gets the entity to be used for a connection.
+    pub fn identity(&self) -> &Identity {
+        &self.identity
+    }
+}
 
 pub(crate) struct Connection {
     pub authly_service: AuthlyServiceClient<tonic::transport::Channel>,
@@ -34,16 +58,7 @@ impl ReconfigureStrategy {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct ConnectionParams {
-    pub inference: Inference,
-    pub url: Cow<'static, str>,
-    pub authly_local_ca: Vec<u8>,
-    pub identity: Identity,
-    pub jwt_decoding_key: jsonwebtoken::DecodingKey,
-}
-
-pub async fn make_connection(params: Arc<ConnectionParams>) -> Result<Connection, Error> {
+pub(crate) async fn make_connection(params: Arc<ConnectionParams>) -> Result<Connection, Error> {
     let tls_config = tonic::transport::ClientTlsConfig::new()
         .ca_certificate(tonic::transport::Certificate::from_pem(
             &params.authly_local_ca,

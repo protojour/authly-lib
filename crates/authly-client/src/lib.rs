@@ -33,13 +33,13 @@ use http::header::COOKIE;
 use tonic::{transport::Channel, Request};
 
 pub mod access_control;
+pub mod connection;
 pub mod identity;
 pub mod metadata;
 pub mod token;
 
 mod background_worker;
 mod builder;
-mod connection;
 mod error;
 
 /// File path for the root CA certificate.
@@ -172,6 +172,13 @@ impl Client {
         self.decode_access_token(proto.token)
     }
 
+    /// Convert a clone of self into a dynamically dispatched access control object.
+    ///
+    /// This can be useful in tests where access control needs to be mocked out.
+    pub fn into_dyn_access_control(self) -> Arc<dyn AccessControl + Send + Sync + 'static> {
+        Arc::new(self)
+    }
+
     /// Generate a server certificate and a key pair for the service.
     ///
     /// This involves sending a Certificate Signing Request for Authly to resolve.
@@ -230,13 +237,6 @@ impl Client {
         })?;
 
         Ok((certificate, private_key))
-    }
-
-    /// Convert a clone of self into a dynamically dispatched access control object.
-    ///
-    /// This can be useful in tests where access control needs to be mocked out.
-    pub fn into_dyn_access_control(self) -> Arc<dyn AccessControl + Send + Sync + 'static> {
-        Arc::new(self)
     }
 
     /// Return a stream of [rustls::ServerConfig] values for configuring authly-verified servers.
@@ -330,14 +330,46 @@ impl Client {
         Ok(immediate_stream.chain(rotation_stream).boxed())
     }
 
+    /// Generates a stream of [ConnectionParams] that this client uses to connect to Authly.
+    ///
+    /// The TLS-related parts of those parameters can be used by the client when
+    /// communicating with other services in the Authly service mesh.
+    ///
+    /// The first stream item will resolve immediately.
+    pub async fn connection_params_stream(
+        &self,
+    ) -> Result<futures_util::stream::BoxStream<'static, Arc<ConnectionParams>>, Error> {
+        use futures_util::StreamExt;
+
+        let mut reconfigured_rx = self.state.reconfigured_rx.clone();
+        let initial_params = reconfigured_rx.borrow_and_update().clone();
+
+        let immediate_stream = futures_util::stream::iter([initial_params]);
+
+        let rotation_stream =
+            futures_util::stream::unfold(reconfigured_rx, move |mut reconfigured_rx| {
+                async move {
+                    // wait for configuration change
+                    let Ok(()) = reconfigured_rx.changed().await else {
+                        // client dropped
+                        return None;
+                    };
+
+                    let params = reconfigured_rx.borrow_and_update().clone();
+
+                    Some((params, reconfigured_rx))
+                }
+            });
+
+        Ok(immediate_stream.chain(rotation_stream).boxed())
+    }
+
     /// Generates a stream of [reqwest::ClientBuilder] preconfigured with Authly TLS paramaters.
     /// The first stream item will resolve immediately.
     #[cfg(feature = "reqwest_012")]
     pub async fn request_client_builder_stream(
         &self,
     ) -> Result<futures_util::stream::BoxStream<'static, reqwest::ClientBuilder>, Error> {
-        use std::time::Duration;
-
         use futures_util::StreamExt;
 
         fn rebuild(params: Arc<ConnectionParams>) -> Result<reqwest::ClientBuilder, Error> {
@@ -352,39 +384,11 @@ impl Client {
                 ))
         }
 
-        let mut reconfigured_rx = self.state.reconfigured_rx.clone();
-        let initial_params = reconfigured_rx.borrow_and_update().clone();
-
-        let initial_builder = rebuild(initial_params)?;
-        let immediate_stream = futures_util::stream::iter([initial_builder]);
-
-        let rotation_stream =
-            futures_util::stream::unfold(reconfigured_rx, move |mut reconfigured_rx| {
-                async move {
-                    // wait for configuration change
-                    let Ok(()) = reconfigured_rx.changed().await else {
-                        // client dropped
-                        return None;
-                    };
-
-                    loop {
-                        let params = reconfigured_rx.borrow_and_update().clone();
-
-                        match rebuild(params) {
-                            Ok(server_config) => return Some((server_config, reconfigured_rx)),
-                            Err(err) => {
-                                tracing::error!(
-                                    ?err,
-                                    "could not regenerate reqwest ClientBuilder, retrying soon"
-                                );
-                                tokio::time::sleep(Duration::from_secs(10)).await;
-                            }
-                        }
-                    }
-                }
-            });
-
-        Ok(immediate_stream.chain(rotation_stream).boxed())
+        Ok(self
+            .connection_params_stream()
+            .await?
+            .map(|params| rebuild(params).expect("could not make a reqwest Client"))
+            .boxed())
     }
 }
 

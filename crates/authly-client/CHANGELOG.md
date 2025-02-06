@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Make access control test-friendly with dynamically-dispatched `AccessControl` trait.
 - `NamespacedPropertyAttribute` trait for making less verbose access control requests.
 
+### Added
+- `ConnectionParams` now public, and added a stream of `Arc<ConnectionParam>` to the Client API.
+
 ## [0.0.6] - 2025-02-04
 ### Changed
 - Namespaces ("domains") added to access control API
