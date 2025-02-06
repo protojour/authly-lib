@@ -336,9 +336,9 @@ impl Client {
     /// communicating with other services in the Authly service mesh.
     ///
     /// The first stream item will resolve immediately.
-    pub async fn connection_params_stream(
+    pub fn connection_params_stream(
         &self,
-    ) -> Result<futures_util::stream::BoxStream<'static, Arc<ConnectionParams>>, Error> {
+    ) -> futures_util::stream::BoxStream<'static, Arc<ConnectionParams>> {
         use futures_util::StreamExt;
 
         let mut reconfigured_rx = self.state.reconfigured_rx.clone();
@@ -361,13 +361,13 @@ impl Client {
                 }
             });
 
-        Ok(immediate_stream.chain(rotation_stream).boxed())
+        immediate_stream.chain(rotation_stream).boxed()
     }
 
     /// Generates a stream of [reqwest::ClientBuilder] preconfigured with Authly TLS paramaters.
     /// The first stream item will resolve immediately.
     #[cfg(feature = "reqwest_012")]
-    pub async fn request_client_builder_stream(
+    pub fn request_client_builder_stream(
         &self,
     ) -> Result<futures_util::stream::BoxStream<'static, reqwest::ClientBuilder>, Error> {
         use futures_util::StreamExt;
@@ -386,7 +386,6 @@ impl Client {
 
         Ok(self
             .connection_params_stream()
-            .await?
             .map(|params| rebuild(params).expect("could not make a reqwest Client"))
             .boxed())
     }
