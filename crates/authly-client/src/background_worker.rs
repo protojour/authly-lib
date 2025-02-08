@@ -9,32 +9,32 @@ use crate::{
     error, ClientState, Error,
 };
 
+pub struct WorkerSenders {
+    pub reconfigured_tx: tokio::sync::watch::Sender<Arc<ConnectionParams>>,
+    pub metadata_invalidated_tx: tokio::sync::watch::Sender<()>,
+}
+
 pub async fn spawn_background_worker(
     state: Arc<ClientState>,
-    reconfigured_tx: tokio::sync::watch::Sender<Arc<ConnectionParams>>,
+    senders: WorkerSenders,
     closed_rx: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), Error> {
     let msg_stream = init_message_stream(&state).await?;
-    tokio::spawn(background_worker(
-        state,
-        reconfigured_tx,
-        closed_rx,
-        msg_stream,
-    ));
+    tokio::spawn(background_worker(state, senders, closed_rx, msg_stream));
 
     Ok(())
 }
 
 async fn background_worker(
     state: Arc<ClientState>,
-    reconfigured_tx: tokio::sync::watch::Sender<Arc<ConnectionParams>>,
+    senders: WorkerSenders,
     mut closed_rx: tokio::sync::watch::Receiver<()>,
     mut msg_stream: Streaming<proto::ServiceMessage>,
 ) {
     loop {
         tokio::select! {
             msg_result = msg_stream.message() => {
-                handle_message_result(&state, msg_result, &mut msg_stream, &reconfigured_tx).await;
+                handle_message_result(&state, msg_result, &mut msg_stream, &senders).await;
             }
             _ = closed_rx.changed() => {
                 tracing::info!("Authly channel closed");
@@ -48,19 +48,19 @@ async fn handle_message_result(
     state: &ClientState,
     msg_result: Result<Option<proto::ServiceMessage>, tonic::Status>,
     msg_stream: &mut Streaming<proto::ServiceMessage>,
-    reconfigured_tx: &tokio::sync::watch::Sender<Arc<ConnectionParams>>,
+    senders: &WorkerSenders,
 ) {
     match msg_result {
         Ok(Some(msg)) => {
             if let Some(kind) = msg.service_message_kind {
-                handle_message_kind(state, kind, msg_stream, reconfigured_tx).await;
+                handle_message_kind(state, kind, msg_stream, senders).await;
             }
         }
         Ok(None) => {
-            reconfigure_loop(state, msg_stream, reconfigured_tx).await;
+            reconfigure_loop(state, msg_stream, senders).await;
         }
         Err(_error) => {
-            reconfigure_loop(state, msg_stream, reconfigured_tx).await;
+            reconfigure_loop(state, msg_stream, senders).await;
         }
     }
 }
@@ -69,16 +69,16 @@ async fn handle_message_kind(
     state: &ClientState,
     msg_kind: proto::service_message::ServiceMessageKind,
     msg_stream: &mut Streaming<proto::ServiceMessage>,
-    reconfigured_tx: &tokio::sync::watch::Sender<Arc<ConnectionParams>>,
+    senders: &WorkerSenders,
 ) {
     tracing::info!(?msg_kind, "Received Authly message");
 
     match msg_kind {
         proto::service_message::ServiceMessageKind::ReloadCa(_) => {
-            reconfigure_loop(state, msg_stream, reconfigured_tx).await;
+            reconfigure_loop(state, msg_stream, senders).await;
         }
         proto::service_message::ServiceMessageKind::ReloadCache(_) => {
-            reload_local_cache(state).await;
+            reload_local_cache(state, senders).await;
         }
         proto::service_message::ServiceMessageKind::Ping(_) => {
             let _result = state
@@ -95,10 +95,10 @@ async fn handle_message_kind(
 async fn reconfigure_loop(
     state: &ClientState,
     msg_stream: &mut Streaming<proto::ServiceMessage>,
-    reconfigured_tx: &tokio::sync::watch::Sender<Arc<ConnectionParams>>,
+    senders: &WorkerSenders,
 ) {
     loop {
-        match try_reconfigure(state, msg_stream, reconfigured_tx).await {
+        match try_reconfigure(state, msg_stream, senders).await {
             Ok(()) => return,
             Err(err) => {
                 tracing::error!(?err, "background reconfigure error");
@@ -112,7 +112,7 @@ async fn reconfigure_loop(
 async fn try_reconfigure(
     state: &ClientState,
     msg_stream: &mut Streaming<proto::ServiceMessage>,
-    reconfigured_tx: &tokio::sync::watch::Sender<Arc<ConnectionParams>>,
+    senders: &WorkerSenders,
 ) -> Result<(), Error> {
     let params = state.reconfigure.new_connection_params().await?;
     let connection = Arc::new(make_connection(params.clone()).await?);
@@ -120,9 +120,9 @@ async fn try_reconfigure(
     state.conn.store(connection.clone());
 
     *msg_stream = init_message_stream(state).await?;
-    reload_local_cache(state).await;
+    reload_local_cache(state, senders).await;
 
-    if let Err(err) = reconfigured_tx.send(params) {
+    if let Err(err) = senders.reconfigured_tx.send(params) {
         tracing::error!(?err, "Could not publish reconfigured connection params");
     }
 
@@ -141,12 +141,15 @@ async fn init_message_stream(
     Ok(response.into_inner())
 }
 
-async fn reload_local_cache(state: &ClientState) {
+async fn reload_local_cache(state: &ClientState, senders: &WorkerSenders) {
     match access_control::get_resource_property_mapping(state.conn.load().authly_service.clone())
         .await
     {
         Ok(property_mapping) => {
             state.resource_property_mapping.store(property_mapping);
+            if let Err(err) = senders.metadata_invalidated_tx.send(()) {
+                tracing::error!(?err, "Could not publish cache cleared");
+            }
         }
         Err(err) => {
             tracing::error!(?err, "failed to reload resource property mapping");

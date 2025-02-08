@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `ConnectionParams` now public, and added a stream of `Arc<ConnectionParam>` to the Client API.
+- `metadata_stream` added to Client.
 
 ## [0.0.6] - 2025-02-04
 ### Changed

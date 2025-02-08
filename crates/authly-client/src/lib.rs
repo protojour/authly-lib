@@ -11,14 +11,16 @@ pub use builder::ClientBuilder;
 use builder::ConnectionParamsBuilder;
 use connection::{Connection, ConnectionParams, ReconfigureStrategy};
 pub use error::Error;
+use futures_util::{stream::BoxStream, StreamExt};
 use metadata::{NamespaceMetadata, ServiceMetadata};
 use rcgen::{CertificateParams, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose};
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 pub use token::AccessToken;
 
 use arc_swap::ArcSwap;
+use tracing::info;
 
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, sync::Arc, time::Duration};
 
 use anyhow::anyhow;
 use authly_common::{
@@ -69,9 +71,12 @@ struct ClientState {
     /// How to reconfigure the connection
     reconfigure: ReconfigureStrategy,
 
-    /// Triggered when the client gets reconfigured
+    /// Triggered when the client connection parameters get reconfigured
     #[allow(unused)]
     reconfigured_rx: tokio::sync::watch::Receiver<Arc<ConnectionParams>>,
+
+    /// Triggered when the cache is cleared => service metadata invalidated
+    metadata_invalidated_rx: tokio::sync::watch::Receiver<()>,
 
     /// signal sent when the state is dropped
     closed_tx: tokio::sync::watch::Sender<()>,
@@ -122,6 +127,52 @@ impl Client {
                 })
                 .collect(),
         })
+    }
+
+    /// Get a stream of [ServiceMetadata] changes.
+    ///
+    /// The first metadata in the stream resolves immediately, and is the current metadata.
+    pub async fn metadata_stream(&self) -> Result<BoxStream<'static, ServiceMetadata>, Error> {
+        struct StreamState {
+            initial: Option<ServiceMetadata>,
+            client: Client,
+            watch: tokio::sync::watch::Receiver<()>,
+        }
+
+        let mut state = StreamState {
+            initial: Some(self.metadata().await?),
+            client: self.clone(),
+            watch: self.state.metadata_invalidated_rx.clone(),
+        };
+        state.watch.mark_unchanged();
+
+        Ok(futures_util::stream::unfold(state, |mut state| async move {
+            match state.initial {
+                Some(initial) => Some((
+                    initial,
+                    StreamState {
+                        initial: None,
+                        ..state
+                    },
+                )),
+                None => {
+                    state.watch.changed().await.ok()?;
+
+                    let next = loop {
+                        match state.client.metadata().await {
+                            Ok(metadata) => break metadata,
+                            Err(err) => {
+                                info!(?err, "unable to re-fetch metadata, retrying soon");
+                                tokio::time::sleep(Duration::from_secs(10)).await;
+                            }
+                        }
+                    };
+
+                    Some((next, state))
+                }
+            }
+        })
+        .boxed())
     }
 
     /// Get the current resource properties of this service, in the form of a [PropertyMapping].
@@ -302,10 +353,7 @@ impl Client {
 
                 async move {
                     // wait for configuration change
-                    let Ok(()) = reconfigured_rx.changed().await else {
-                        // client dropped
-                        return None;
-                    };
+                    reconfigured_rx.changed().await.ok()?;
 
                     loop {
                         let params = reconfigured_rx.borrow_and_update().clone();

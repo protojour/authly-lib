@@ -7,7 +7,7 @@ use rcgen::KeyPair;
 
 use crate::{
     access_control,
-    background_worker::spawn_background_worker,
+    background_worker::{spawn_background_worker, WorkerSenders},
     connection::{make_connection, ConnectionParams, ReconfigureStrategy},
     error,
     identity::Identity,
@@ -76,6 +76,7 @@ impl ClientBuilder {
         let params = self.inner.try_into_connection_params()?;
         let connection = make_connection(params.clone()).await?;
         let (reconfigured_tx, reconfigured_rx) = tokio::sync::watch::channel(params.clone());
+        let (metadata_invalidated_tx, metadata_invalidated_rx) = tokio::sync::watch::channel(());
 
         let reconfigure = match params.inference {
             Inference::Inferred => ReconfigureStrategy::ReInfer {
@@ -93,11 +94,20 @@ impl ClientBuilder {
             conn: ArcSwap::new(Arc::new(connection)),
             reconfigure,
             reconfigured_rx,
+            metadata_invalidated_rx,
             closed_tx,
             resource_property_mapping: ArcSwap::new(resource_property_mapping),
         });
 
-        spawn_background_worker(state.clone(), reconfigured_tx, closed_rx).await?;
+        spawn_background_worker(
+            state.clone(),
+            WorkerSenders {
+                reconfigured_tx,
+                metadata_invalidated_tx,
+            },
+            closed_rx,
+        )
+        .await?;
 
         let client = Client { state };
 
