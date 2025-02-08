@@ -148,7 +148,7 @@ async fn reload_local_cache(state: &ClientState, senders: &WorkerSenders) {
         Ok(property_mapping) => {
             state.resource_property_mapping.store(property_mapping);
             if let Err(err) = senders.metadata_invalidated_tx.send(()) {
-                tracing::error!(?err, "Could not publish cache cleared");
+                tracing::error!(?err, "Could not publish metadata invalidated");
             }
         }
         Err(err) => {
