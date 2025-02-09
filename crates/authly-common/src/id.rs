@@ -170,7 +170,9 @@ pub mod kind {
             match self {
                 Self::Entity => Some("e."),
                 Self::Domain => Some("d."),
+                Self::Property => Some("p."),
                 Self::Attribute => Some("a."),
+                Self::Directory => Some("dir."),
                 _ => None,
             }
         }
