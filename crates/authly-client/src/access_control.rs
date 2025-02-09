@@ -3,7 +3,7 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use authly_common::{
-    id::{AttrId, Eid},
+    id::{AttrId, Eid, Id128DynamicArrayConv},
     proto::service::{self as proto, authly_service_client::AuthlyServiceClient},
     service::{NamespacePropertyMapping, NamespacedPropertyAttribute},
 };
@@ -149,7 +149,7 @@ pub(crate) async fn get_resource_property_mapping(
             for attribute in property.attributes {
                 ns_prop.put(
                     attribute.label,
-                    AttrId::from_raw_bytes(&attribute.obj_id).ok_or_else(id_codec_error)?,
+                    AttrId::try_from_bytes_dynamic(&attribute.obj_id).ok_or_else(id_codec_error)?,
                 );
             }
         }
@@ -172,14 +172,14 @@ impl AccessControl for Client {
                 resource_attributes: builder
                     .resource_attributes
                     .into_iter()
-                    .map(|attr| attr.to_raw_array().to_vec())
+                    .map(|attr| attr.to_array_dynamic().to_vec())
                     .collect(),
                 // Peer entity attributes are currently not known to the service:
                 peer_entity_attributes: vec![],
                 peer_entity_ids: builder
                     .peer_entity_ids
                     .into_iter()
-                    .map(|eid| eid.to_raw_array().to_vec())
+                    .map(|eid| eid.to_array_dynamic().to_vec())
                     .collect(),
             });
             if let Some(access_token) = builder.access_token {

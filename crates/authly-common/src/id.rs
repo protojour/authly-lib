@@ -130,6 +130,11 @@ pub trait Id128DynamicArrayConv: Sized {
     /// Convert a byte array into this type.
     fn try_from_array_dynamic(array: &[u8; 17]) -> Option<Self>;
 
+    /// Convert a byte slice into this type.
+    fn try_from_bytes_dynamic(bytes: &[u8]) -> Option<Self> {
+        Self::try_from_array_dynamic(bytes.try_into().ok()?)
+    }
+
     /// Convert this type into a byte array.
     fn to_array_dynamic(&self) -> [u8; 17];
 }
