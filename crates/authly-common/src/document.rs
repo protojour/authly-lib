@@ -6,7 +6,7 @@ use serde::Deserialize;
 use toml::Spanned;
 use uuid::Uuid;
 
-use crate::{id::Eid, property::QualifiedAttributeName};
+use crate::{id::EntityId, property::QualifiedAttributeName};
 
 /// The deserialized representation of an authly document.
 #[derive(Deserialize)]
@@ -73,8 +73,8 @@ pub type DynamicObject = serde_json::Map<String, serde_json::Value>;
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Entity {
-    /// The eid of this entity.
-    pub eid: Spanned<Eid>,
+    /// The id of this entity.
+    pub eid: Spanned<EntityId>,
 
     /// A label for the entity visible in the document namespace.
     #[serde(default)]

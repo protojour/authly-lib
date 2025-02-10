@@ -5,11 +5,11 @@ use hyper::body::Incoming;
 use tracing::warn;
 use x509_parser::prelude::{FromDer, X509Certificate};
 
-use crate::{certificate::oid::ENTITY_UNIQUE_IDENTIFIER, id::Eid};
+use crate::{certificate::oid::ENTITY_UNIQUE_IDENTIFIER, id::ServiceId};
 
 /// A [Request] extension representing the peer Authly service that connected to the local server.
 #[derive(Clone, Copy, Debug)]
-pub struct PeerServiceEntity(pub Eid);
+pub struct PeerServiceEntity(pub ServiceId);
 
 /// A middleware for setting up mTLS with [tower_server].
 #[derive(Clone)]
@@ -18,7 +18,7 @@ pub struct MTLSMiddleware;
 /// The
 #[derive(Default)]
 pub struct MTLSConnectionData {
-    peer_service_entity: Option<Eid>,
+    peer_service_entity: Option<ServiceId>,
 }
 
 impl tower_server::tls::TlsConnectionMiddleware for MTLSMiddleware {

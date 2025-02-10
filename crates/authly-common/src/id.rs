@@ -10,6 +10,7 @@ use anyhow::{anyhow, Context};
 use kind::{IdKind, Kind};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use subset::{IdKindSubset, IdKindSupersetOf};
 
 use crate::FromStrVisitor;
 
@@ -51,6 +52,17 @@ impl<K> Id128<K> {
     /// Convert to an unsigned integer
     pub fn to_uint(&self) -> u128 {
         u128::from_be_bytes(self.0)
+    }
+}
+
+impl<K: IdKind> Id128<K> {
+    /// Infallibly convert this into a [DynamicId]
+    pub fn upcast<KS: IdKindSubset + IdKindSupersetOf<K>>(self) -> DynamicId<KS> {
+        DynamicId {
+            id: self.0,
+            kind: K::kind(),
+            _subset: PhantomData,
+        }
     }
 }
 
@@ -108,21 +120,8 @@ impl<K> Debug for Id128<K> {
 
 impl<K: IdKind> Display for Id128<K> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(prefix) = K::kind().str_prefix() {
-            write!(f, "{prefix}")?;
-        }
-
-        write!(f, "{}", hexhex::hex(&self.0))
+        write!(f, "{}.{}", K::kind().str_prefix(), hexhex::hex(&self.0))
     }
-}
-
-/// Conversion to and from byte arrays without Kind information.
-pub trait Id128StaticArrayConv {
-    /// Convert a byte array into this type.
-    fn from_array_static(array: &[u8; 16]) -> Self;
-
-    /// Convert this type into a byte array.
-    fn to_array_static(&self) -> [u8; 16];
 }
 
 /// Conversion to and from byte arrays with Kind information.
@@ -142,44 +141,59 @@ pub trait Id128DynamicArrayConv: Sized {
 /// Types of Kinds of typed Ids.
 pub mod kind {
     use int_enum::IntEnum;
+    use serde::{Deserialize, Serialize};
 
     /// A dynamic kind of ID.
     ///
     /// It acts as a "namespace" for identifiers.
-    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, IntEnum, Debug)]
+    ///
+    /// NB: This enum is used in persisted postcard serializations, new variants should be added at the end!
+    #[derive(
+        Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, IntEnum, Serialize, Deserialize, Debug,
+    )]
     #[repr(u8)]
     pub enum Kind {
-        /// Entity kind.
-        Entity = 0,
+        /// Persona Entity kind.
+        Persona = 0,
+        /// Group Entity kind.
+        Group = 1,
+        /// Service Entity kind.
+        Service = 2,
         /// Domain kind.
-        Domain = 1,
+        Domain = 3,
         /// Policy kind.
-        Policy = 2,
+        Policy = 4,
         /// Policy binding kind.
-        PolicyBinding = 3,
+        PolicyBinding = 5,
         /// Property kind.
-        Property = 4,
+        Property = 6,
         /// Attribute kind.
-        Attribute = 5,
+        Attribute = 7,
         /// Directory kind.
-        Directory = 6,
+        Directory = 8,
     }
 
     impl Kind {
-        pub(super) const fn str_prefix(&self) -> Option<&'static str> {
+        #[inline]
+        pub(super) const fn str_prefix(&self) -> &'static str {
             match self {
-                Self::Entity => Some("e."),
-                Self::Domain => Some("d."),
-                Self::Property => Some("p."),
-                Self::Attribute => Some("a."),
-                Self::Directory => Some("dir."),
-                _ => None,
+                Self::Persona => "p",
+                Self::Group => "g",
+                Self::Service => "s",
+                Self::Domain => "d",
+                Self::Property => "prp",
+                Self::Attribute => "atr",
+                Self::Directory => "dir",
+                Self::Policy => "pol",
+                Self::PolicyBinding => "plb",
             }
         }
 
         pub(super) const fn name(&self) -> &'static str {
             match self {
-                Kind::Entity => "entity ID",
+                Kind::Persona => "persona ID",
+                Kind::Group => "group ID",
+                Kind::Service => "service ID",
                 Kind::Domain => "domain ID",
                 Kind::Policy => "policy ID",
                 Kind::PolicyBinding => "policy binding ID",
@@ -187,6 +201,20 @@ pub mod kind {
                 Kind::Attribute => "attribute ID",
                 Kind::Directory => "directory ID",
             }
+        }
+
+        pub(super) const fn entries() -> &'static [Self] {
+            &[
+                Self::Persona,
+                Self::Group,
+                Self::Service,
+                Self::Domain,
+                Self::Policy,
+                Self::PolicyBinding,
+                Self::Property,
+                Self::Attribute,
+                Self::Directory,
+            ]
         }
     }
 
@@ -196,8 +224,14 @@ pub mod kind {
         fn kind() -> Kind;
     }
 
-    /// Entity ID kind.
-    pub struct Entity;
+    /// Persona ID kind.
+    pub struct Persona;
+
+    /// Group ID kind.
+    pub struct Group;
+
+    /// Service ID kind.
+    pub struct Service;
 
     /// Domain ID kind.
     pub struct Domain;
@@ -217,9 +251,21 @@ pub mod kind {
     /// Directory ID kind.
     pub struct Directory;
 
-    impl IdKind for Entity {
+    impl IdKind for Persona {
         fn kind() -> Kind {
-            Kind::Entity
+            Kind::Persona
+        }
+    }
+
+    impl IdKind for Group {
+        fn kind() -> Kind {
+            Kind::Group
+        }
+    }
+
+    impl IdKind for Service {
+        fn kind() -> Kind {
+            Kind::Service
         }
     }
 
@@ -260,8 +306,64 @@ pub mod kind {
     }
 }
 
-/// Authly Entity ID
-pub type Eid = Id128<kind::Entity>;
+/// Id kind subsets.
+pub mod subset {
+    use super::kind::{Group, IdKind, Kind, Persona, Service};
+
+    /// Describes a specific subset of Authly ID kinds.
+    pub trait IdKindSubset {
+        /// Whether the subset contains the given [Kind].
+        fn contains(kind: Kind) -> bool;
+
+        /// The name of this subset.
+        fn name() -> &'static str;
+    }
+
+    /// Describes a specific _superset_ of K.
+    pub trait IdKindSupersetOf<K> {}
+
+    /// The Entity subset.
+    pub struct Entity;
+
+    /// The Any subset, which contains all kinds of Authly IDs.
+    pub struct Any;
+
+    impl IdKindSubset for Entity {
+        fn contains(kind: Kind) -> bool {
+            matches!(kind, Kind::Persona | Kind::Group | Kind::Service)
+        }
+
+        fn name() -> &'static str {
+            "Entity ID"
+        }
+    }
+
+    impl IdKindSupersetOf<Persona> for Entity {}
+    impl IdKindSupersetOf<Group> for Entity {}
+    impl IdKindSupersetOf<Service> for Entity {}
+
+    impl IdKindSubset for Any {
+        fn contains(_kind: Kind) -> bool {
+            true
+        }
+
+        fn name() -> &'static str {
+            "Any ID"
+        }
+    }
+
+    impl<K: IdKind> IdKindSupersetOf<K> for Any {}
+    impl IdKindSupersetOf<Entity> for Any {}
+}
+
+/// Authly Persona ID
+pub type PersonaId = Id128<kind::Persona>;
+
+/// Authly Group ID
+pub type GroupId = Id128<kind::Group>;
+
+/// Authly Service ID
+pub type ServiceId = Id128<kind::Service>;
 
 /// Authly Property ID
 pub type PropId = Id128<kind::Property>;
@@ -281,33 +383,113 @@ pub type DomainId = Id128<kind::Domain>;
 /// Authly Directory ID
 pub type DirectoryId = Id128<kind::Directory>;
 
-/// Dynamically typed ID
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct AnyId {
-    id: [u8; 16],
+/// Dynamically typed ID, can represent any kind "object" Id
+pub struct DynamicId<KS: IdKindSubset> {
+    pub(crate) id: [u8; 16],
     kind: kind::Kind,
+    _subset: PhantomData<KS>,
 }
 
-impl AnyId {
-    /// The dynamic kind of this AnyId.
+impl<KS: IdKindSubset> DynamicId<KS> {
+    /// Construct a new dynamicId.
+    ///
+    /// Panics if [Kind] is not member of the KS subset.
+    pub fn new(kind: Kind, id: [u8; 16]) -> Self {
+        if !KS::contains(kind) {
+            panic!("Not in subset");
+        }
+        Self {
+            kind,
+            id,
+            _subset: PhantomData,
+        }
+    }
+
+    /// The dynamic kind of this dynamic id.
     pub fn kind(&self) -> Kind {
         self.kind
     }
+
+    /// Infallibly upcast this into a superset [DynamicId].
+    pub fn upcast<KS2: IdKindSubset + IdKindSupersetOf<KS>>(&self) -> DynamicId<KS2> {
+        DynamicId {
+            id: self.id,
+            kind: self.kind,
+            _subset: PhantomData,
+        }
+    }
+
+    /// Get the byte-wise representation of the ID, without type information.
+    /// NB! This erases the dynamic tag!
+    pub const fn to_raw_array(self) -> [u8; 16] {
+        self.id
+    }
 }
+
+impl<KS: IdKindSubset> Clone for DynamicId<KS> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<KS: IdKindSubset> Copy for DynamicId<KS> {}
+
+impl<KS: IdKindSubset> Debug for DynamicId<KS> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}", self.kind.str_prefix(), hexhex::hex(&self.id))
+    }
+}
+
+impl<KS: IdKindSubset> Display for DynamicId<KS> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}", self.kind.str_prefix(), hexhex::hex(&self.id))
+    }
+}
+
+impl<KS: IdKindSubset> PartialEq for DynamicId<KS> {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind && self.id == other.id
+    }
+}
+
+impl<KS: IdKindSubset> Eq for DynamicId<KS> {}
+
+impl<KS: IdKindSubset> Hash for DynamicId<KS> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+        self.kind.hash(state);
+    }
+}
+
+impl<KS: IdKindSubset> PartialOrd<DynamicId<KS>> for DynamicId<KS> {
+    fn partial_cmp(&self, other: &DynamicId<KS>) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<KS: IdKindSubset> Ord for DynamicId<KS> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.kind
+            .cmp(&other.kind)
+            .then_with(|| self.id.cmp(&other.id))
+    }
+}
+
+/// An Authly Entity ID.
+pub type EntityId = DynamicId<subset::Entity>;
+
+/// An Authly Any Id - the Id of any object, entities or other objects.
+pub type AnyId = DynamicId<subset::Any>;
 
 impl<K: IdKind> FromStr for Id128<K> {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let Some(prefix) = K::kind().str_prefix() else {
-            return Err(anyhow!(
-                "{} cannot be deserialized; no prefix",
-                K::kind().name()
-            ));
-        };
+        let prefix = K::kind().str_prefix();
         let Some(s) = s.strip_prefix(prefix) else {
             return Err(anyhow!("unrecognized prefix, expected `{prefix}`"));
         };
+        let s = s.strip_prefix('.').context("missing `.`")?;
 
         let hex = hexhex::decode(s).context("invalid format")?;
         let array: [u8; 16] = hex.try_into().map_err(|_| anyhow!("invalid length"))?;
@@ -319,6 +501,45 @@ impl<K: IdKind> FromStr for Id128<K> {
         }
 
         Ok(Id128(array, PhantomData))
+    }
+}
+
+impl<S: IdKindSubset> FromStr for DynamicId<S> {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut segments = s.splitn(2, ".");
+        let prefix = segments.next().context("no prefix")?;
+        let s = segments.next().context("no hex code")?;
+
+        if segments.next().is_some() {
+            return Err(anyhow!("too many dots"));
+        }
+
+        let kind = Kind::entries()
+            .iter()
+            .copied()
+            .find(|kind| kind.str_prefix() == prefix)
+            .context("unrecognized prefix")?;
+
+        if !S::contains(kind) {
+            return Err(anyhow!("invalid subset"));
+        }
+
+        let hex = hexhex::decode(s).context("invalid format")?;
+        let array: [u8; 16] = hex.try_into().map_err(|_| anyhow!("invalid length"))?;
+
+        let min = 32768_u128.to_be_bytes();
+
+        if array != [0; 16] && array < min {
+            return Err(anyhow!("invalid value, too small"));
+        }
+
+        Ok(DynamicId {
+            id: array,
+            kind,
+            _subset: PhantomData,
+        })
     }
 }
 
@@ -337,20 +558,32 @@ impl<K: IdKind> Serialize for Id128<K> {
         S: serde::Serializer,
     {
         serializer.serialize_str(&format!(
-            "{}{}",
-            K::kind().str_prefix().unwrap_or(""),
+            "{}.{}",
+            K::kind().str_prefix(),
             hexhex::hex(&self.0)
         ))
     }
 }
 
-impl<K: IdKind> Id128StaticArrayConv for Id128<K> {
-    fn from_array_static(array: &[u8; 16]) -> Self {
-        Self::from_raw_array(array)
+impl<KS: IdKindSubset> Serialize for DynamicId<KS> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&format!(
+            "{}.{}",
+            self.kind.str_prefix(),
+            hexhex::hex(&self.id)
+        ))
     }
+}
 
-    fn to_array_static(&self) -> [u8; 16] {
-        self.to_raw_array()
+impl<'de, KS: IdKindSubset> Deserialize<'de> for DynamicId<KS> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(FromStrVisitor::new(KS::name()))
     }
 }
 
@@ -372,12 +605,20 @@ impl<K: IdKind> Id128DynamicArrayConv for Id128<K> {
     }
 }
 
-impl Id128DynamicArrayConv for AnyId {
+impl<KS: IdKindSubset> Id128DynamicArrayConv for DynamicId<KS> {
     fn try_from_array_dynamic(array: &[u8; 17]) -> Option<Self> {
         let kind = Kind::try_from(array[0]).ok()?;
+        if !KS::contains(kind) {
+            return None;
+        }
+
         let id = array[1..].try_into().ok()?;
 
-        Some(Self { kind, id })
+        Some(Self {
+            kind,
+            id,
+            _subset: PhantomData,
+        })
     }
 
     fn to_array_dynamic(&self) -> [u8; 17] {
@@ -388,19 +629,26 @@ impl Id128DynamicArrayConv for AnyId {
     }
 }
 
-impl<K: IdKind> From<Id128<K>> for AnyId {
-    fn from(value: Id128<K>) -> Self {
-        Self {
-            kind: K::kind(),
-            id: value.0,
+impl<K: IdKind, KS: IdKindSubset> TryFrom<Id128<K>> for DynamicId<KS> {
+    type Error = ();
+
+    fn try_from(value: Id128<K>) -> Result<Self, Self::Error> {
+        if KS::contains(K::kind()) {
+            Ok(Self {
+                kind: K::kind(),
+                id: value.0,
+                _subset: PhantomData,
+            })
+        } else {
+            Err(())
         }
     }
 }
 
-impl<K: IdKind> TryFrom<AnyId> for Id128<K> {
+impl<K: IdKind, KS: IdKindSubset> TryFrom<DynamicId<KS>> for Id128<K> {
     type Error = ();
 
-    fn try_from(value: AnyId) -> Result<Self, Self::Error> {
+    fn try_from(value: DynamicId<KS>) -> Result<Self, Self::Error> {
         if value.kind != K::kind() {
             return Err(());
         }
@@ -411,24 +659,31 @@ impl<K: IdKind> TryFrom<AnyId> for Id128<K> {
 
 #[test]
 fn from_hex_literal() {
-    let _ = Eid::from(hexhex::hex_literal!("1234abcd1234abcd1234abcd1234abcd"));
+    let _ = PersonaId::from(hexhex::hex_literal!("1234abcd1234abcd1234abcd1234abcd"));
 }
 
 #[test]
 fn from_str() {
-    Eid::from_str("e.1234abcd1234abcd1234abcd1234abcd").unwrap();
-    Eid::from_str("d.1234abcd1234abcd1234abcd1234abcd").unwrap_err();
+    PersonaId::from_str("p.1234abcd1234abcd1234abcd1234abcd").unwrap();
+    ServiceId::from_str("s.1234abcd1234abcd1234abcd1234abcd").unwrap();
+    PersonaId::from_str("d.1234abcd1234abcd1234abcd1234abcd").unwrap_err();
     DomainId::from_str("d.1234abcd1234abcd1234abcd1234abcd").unwrap();
+
+    AnyId::from_str("s.1234abcd1234abcd1234abcd1234abcd").unwrap();
+    AnyId::from_str("d.1234abcd1234abcd1234abcd1234abcd").unwrap();
+    EntityId::from_str("s.1234abcd1234abcd1234abcd1234abcd").unwrap();
+    EntityId::from_str("g.1234abcd1234abcd1234abcd1234abcd").unwrap();
+    EntityId::from_str("d.1234abcd1234abcd1234abcd1234abcd").unwrap_err();
 }
 
 #[test]
 fn serde() {
-    let before = Eid::from_str("e.1234abcd1234abcd1234abcd1234abcd").unwrap();
+    let before = PersonaId::from_str("p.1234abcd1234abcd1234abcd1234abcd").unwrap();
     let json = serde_json::to_string(&before).unwrap();
 
-    assert_eq!("\"e.1234abcd1234abcd1234abcd1234abcd\"", json);
+    assert_eq!("\"p.1234abcd1234abcd1234abcd1234abcd\"", json);
 
-    let after: Eid = serde_json::from_str(&json).unwrap();
+    let after: PersonaId = serde_json::from_str(&json).unwrap();
 
     assert_eq!(before, after);
 }

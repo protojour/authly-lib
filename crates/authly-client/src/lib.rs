@@ -25,7 +25,7 @@ use std::{borrow::Cow, sync::Arc, time::Duration};
 use anyhow::anyhow;
 use authly_common::{
     access_token::AuthlyAccessTokenClaims,
-    id::{Eid, Id128DynamicArrayConv},
+    id::{Id128DynamicArrayConv, ServiceId},
     proto::{
         proto_struct_to_json,
         service::{self as proto, authly_service_client::AuthlyServiceClient},
@@ -116,7 +116,8 @@ impl Client {
             .into_inner();
 
         Ok(ServiceMetadata {
-            entity_id: Eid::try_from_bytes_dynamic(&proto.entity_id).ok_or_else(id_codec_error)?,
+            entity_id: ServiceId::try_from_bytes_dynamic(&proto.entity_id)
+                .ok_or_else(id_codec_error)?,
             label: proto.label,
             namespaces: proto
                 .namespaces
@@ -175,7 +176,7 @@ impl Client {
         .boxed())
     }
 
-    /// Get the current resource properties of this service, in the form of a [PropertyMapping].
+    /// Get the current resource properties of this service, in the form of a [NamespacePropertyMapping].
     pub fn get_resource_property_mapping(&self) -> Arc<NamespacePropertyMapping> {
         self.state.resource_property_mapping.load_full()
     }

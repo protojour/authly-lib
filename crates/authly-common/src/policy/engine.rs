@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use fnv::{FnvHashMap, FnvHashSet};
 use tracing::error;
 
-use crate::id::{AttrId, Eid, Id128, PolicyId, PropId};
+use crate::id::{kind::Kind, AttrId, EntityId, Id128, PolicyId, PropId};
 
 use super::code::{Bytecode, PolicyValue};
 
@@ -28,13 +28,13 @@ pub enum EvalError {
 #[derive(Default, Debug)]
 pub struct AccessControlParams {
     /// Entity IDs related to the `subject`.
-    pub subject_eids: FnvHashMap<PropId, Eid>,
+    pub subject_eids: FnvHashMap<PropId, EntityId>,
 
     /// Attributes related to the `subject`.
     pub subject_attrs: FnvHashSet<AttrId>,
 
     /// Entity IDs related to the `resource`.
-    pub resource_eids: FnvHashMap<PropId, Eid>,
+    pub resource_eids: FnvHashMap<PropId, EntityId>,
 
     /// Attributes related to the `resource`.
     pub resource_attrs: FnvHashSet<AttrId>,
@@ -90,7 +90,7 @@ struct Policy {
 enum StackItem<'a> {
     Uint(u64),
     AttrIdSet(&'a FnvHashSet<AttrId>),
-    EntityId(Eid),
+    EntityId(EntityId),
     AttrId(AttrId),
 }
 
@@ -314,8 +314,14 @@ fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<bool, Eval
                 stack.push(StackItem::AttrIdSet(&params.resource_attrs));
             }
             Bytecode::LoadConstEntityId => {
-                let (id, next) = decode_id(pc)?;
-                stack.push(StackItem::EntityId(id));
+                let Ok(kind) = Kind::try_from(pc[0]) else {
+                    return Err(EvalError::Type);
+                };
+                pc = &pc[1..];
+
+                let (uint, next) =
+                    unsigned_varint::decode::u128(pc).map_err(|_| EvalError::Program)?;
+                stack.push(StackItem::EntityId(EntityId::new(kind, uint.to_be_bytes())));
                 pc = next;
             }
             Bytecode::LoadConstAttrId => {

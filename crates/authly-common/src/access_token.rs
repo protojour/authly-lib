@@ -3,7 +3,7 @@
 use fnv::FnvHashSet;
 use serde::{Deserialize, Serialize};
 
-use crate::id::{AttrId, Eid};
+use crate::id::{AttrId, EntityId};
 
 /// Claims for the Authly Access Token JWT
 #[derive(Serialize, Deserialize, Debug)]
@@ -23,8 +23,8 @@ pub struct AuthlyAccessTokenClaims {
 /// The authly claim.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Authly {
-    /// The [Eid] of the entity the access token was issued for.
-    pub entity_id: Eid,
+    /// The [EntityId] of the entity the access token was issued for.
+    pub entity_id: EntityId,
 
     /// The entity attributes at the time the token was issued.
     pub entity_attributes: FnvHashSet<AttrId>,

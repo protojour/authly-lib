@@ -2,7 +2,7 @@
 
 use std::{borrow::Cow, str::FromStr};
 
-use authly_common::id::Eid;
+use authly_common::id::ServiceId;
 use pem::{EncodeConfig, Pem};
 
 use crate::Error;
@@ -82,7 +82,7 @@ impl Identity {
 
 #[derive(Clone)]
 pub(crate) struct IdentityData {
-    pub entity_id: Eid,
+    pub entity_id: ServiceId,
 }
 
 pub(crate) fn parse_identity_data(cert: &[u8]) -> Result<IdentityData, Error> {
@@ -91,7 +91,7 @@ pub(crate) fn parse_identity_data(cert: &[u8]) -> Result<IdentityData, Error> {
     let (_, x509_cert) = x509_parser::parse_x509_certificate(pem.contents())
         .map_err(|_| Error::AuthlyCA("invalid authly certificate"))?;
 
-    let mut entity_id: Option<Eid> = None;
+    let mut entity_id: Option<ServiceId> = None;
 
     for subject_attr in x509_cert.subject().iter_attributes() {
         if let Some(oid_iter) = subject_attr.attr_type().iter() {
@@ -104,7 +104,7 @@ pub(crate) fn parse_identity_data(cert: &[u8]) -> Result<IdentityData, Error> {
                     .as_str()
                     .map_err(|_| Error::Identity("Entity Id value encoding"))?;
                 entity_id = Some(
-                    Eid::from_str(value)
+                    ServiceId::from_str(value)
                         .map_err(|_| Error::Identity("Entity Id value encoding"))?,
                 );
             }

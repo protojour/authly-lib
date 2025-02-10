@@ -3,7 +3,7 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use authly_common::{
-    id::{AttrId, Eid, Id128DynamicArrayConv},
+    id::{AttrId, EntityId, Id128DynamicArrayConv},
     proto::service::{self as proto, authly_service_client::AuthlyServiceClient},
     service::{NamespacePropertyMapping, NamespacedPropertyAttribute},
 };
@@ -37,7 +37,7 @@ pub struct AccessControlRequestBuilder<'c> {
     property_mapping: Arc<NamespacePropertyMapping>,
     access_token: Option<Arc<AccessToken>>,
     resource_attributes: FnvHashSet<AttrId>,
-    peer_entity_ids: FnvHashSet<Eid>,
+    peer_entity_ids: FnvHashSet<EntityId>,
 }
 
 impl<'c> AccessControlRequestBuilder<'c> {
@@ -103,7 +103,7 @@ impl<'c> AccessControlRequestBuilder<'c> {
     }
 
     /// Add a peer entity ID, which represents a client acting as a subject in the access control request.
-    pub fn peer_entity_id(mut self, entity_id: Eid) -> Self {
+    pub fn peer_entity_id(mut self, entity_id: EntityId) -> Self {
         self.peer_entity_ids.insert(entity_id);
         self
     }

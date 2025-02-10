@@ -24,8 +24,8 @@ const EXTRA: AttrId = AttrId::from_uint(42);
 
 fn true_policy() -> Vec<u8> {
     to_bytecode(&[
-        OpCode::LoadConstAttrId(0),
-        OpCode::LoadConstAttrId(0),
+        OpCode::LoadConstAttrId(AttrId::from_uint(0)),
+        OpCode::LoadConstAttrId(AttrId::from_uint(0)),
         OpCode::IsEq,
         OpCode::Return,
     ])
@@ -33,8 +33,8 @@ fn true_policy() -> Vec<u8> {
 
 fn false_policy() -> Vec<u8> {
     to_bytecode(&[
-        OpCode::LoadConstAttrId(0),
-        OpCode::LoadConstAttrId(1),
+        OpCode::LoadConstAttrId(AttrId::from_uint(0)),
+        OpCode::LoadConstAttrId(AttrId::from_uint(1)),
         OpCode::IsEq,
         OpCode::Return,
     ])
