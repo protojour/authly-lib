@@ -2,10 +2,11 @@
 
 use std::collections::BTreeSet;
 
+use byteorder::{BigEndian, ReadBytesExt};
 use fnv::{FnvHashMap, FnvHashSet};
 use tracing::error;
 
-use crate::id::{kind::Kind, AttrId, EntityId, Id128, PolicyId, PropId};
+use crate::id::{kind::Kind, AttrId, EntityId, PolicyId, PropId};
 
 use super::code::{Bytecode, PolicyValue};
 
@@ -292,42 +293,35 @@ fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<bool, Eval
 
         match code {
             Bytecode::LoadSubjectId => {
-                let (key, next) = decode_id(pc)?;
-                let Some(id) = params.subject_eids.get(&key) else {
+                let prop_id = PropId::from_uint(pc.read_u128::<BigEndian>()?);
+                let Some(id) = params.subject_eids.get(&prop_id) else {
                     return Err(EvalError::Type);
                 };
                 stack.push(StackItem::EntityId(*id));
-                pc = next;
             }
             Bytecode::LoadSubjectAttrs => {
                 stack.push(StackItem::AttrIdSet(&params.subject_attrs));
             }
             Bytecode::LoadResourceId => {
-                let (key, next) = decode_id(pc)?;
-                let Some(id) = params.resource_eids.get(&key) else {
+                let prop_id = PropId::from_uint(pc.read_u128::<BigEndian>()?);
+                let Some(id) = params.resource_eids.get(&prop_id) else {
                     return Err(EvalError::Type);
                 };
                 stack.push(StackItem::EntityId(*id));
-                pc = next;
             }
             Bytecode::LoadResourceAttrs => {
                 stack.push(StackItem::AttrIdSet(&params.resource_attrs));
             }
             Bytecode::LoadConstEntityId => {
-                let Ok(kind) = Kind::try_from(pc[0]) else {
+                let Ok(kind) = Kind::try_from(pc.read_u8()?) else {
                     return Err(EvalError::Type);
                 };
-                pc = &pc[1..];
-
-                let (uint, next) =
-                    unsigned_varint::decode::u128(pc).map_err(|_| EvalError::Program)?;
+                let uint = pc.read_u128::<BigEndian>()?;
                 stack.push(StackItem::EntityId(EntityId::new(kind, uint.to_be_bytes())));
-                pc = next;
             }
             Bytecode::LoadConstAttrId => {
-                let (id, next) = decode_id(pc)?;
-                stack.push(StackItem::AttrId(id));
-                pc = next;
+                let attr_id = AttrId::from_uint(pc.read_u128::<BigEndian>()?);
+                stack.push(StackItem::AttrId(attr_id));
             }
             Bytecode::IsEq => {
                 let Some(a) = stack.pop() else {
@@ -408,9 +402,8 @@ fn eval_policy(mut pc: &[u8], params: &AccessControlParams) -> Result<bool, Eval
     Err(EvalError::Program)
 }
 
-#[inline]
-fn decode_id<K>(buf: &[u8]) -> Result<(Id128<K>, &[u8]), EvalError> {
-    let (uint, next) = unsigned_varint::decode::u128(buf).map_err(|_| EvalError::Program)?;
-
-    Ok((Id128::from_uint(uint), next))
+impl From<std::io::Error> for EvalError {
+    fn from(_value: std::io::Error) -> Self {
+        EvalError::Program
+    }
 }

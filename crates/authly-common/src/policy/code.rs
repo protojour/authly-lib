@@ -82,20 +82,14 @@ pub fn to_bytecode(opcodes: &[OpCode]) -> Vec<u8> {
         match opcode {
             OpCode::LoadSubjectId(prop_id) => {
                 out.push(Bytecode::LoadSubjectId as u8);
-                out.extend(unsigned_varint::encode::u128(
-                    prop_id.to_uint(),
-                    &mut Default::default(),
-                ));
+                out.extend(prop_id.to_raw_array());
             }
             OpCode::LoadSubjectAttrs => {
                 out.push(Bytecode::LoadSubjectAttrs as u8);
             }
             OpCode::LoadResourceId(prop_id) => {
                 out.push(Bytecode::LoadResourceId as u8);
-                out.extend(unsigned_varint::encode::u128(
-                    prop_id.to_uint(),
-                    &mut Default::default(),
-                ));
+                out.extend(prop_id.to_raw_array());
             }
             OpCode::LoadResourceAttrs => {
                 out.push(Bytecode::LoadResourceAttrs as u8);
@@ -103,17 +97,11 @@ pub fn to_bytecode(opcodes: &[OpCode]) -> Vec<u8> {
             OpCode::LoadConstEntityId(eid) => {
                 out.push(Bytecode::LoadConstEntityId as u8);
                 out.push(eid.kind().into());
-                out.extend(unsigned_varint::encode::u128(
-                    u128::from_be_bytes(eid.id),
-                    &mut Default::default(),
-                ));
+                out.extend(eid.id);
             }
             OpCode::LoadConstAttrId(prop_id) => {
                 out.push(Bytecode::LoadConstAttrId as u8);
-                out.extend(unsigned_varint::encode::u128(
-                    prop_id.to_uint(),
-                    &mut Default::default(),
-                ));
+                out.extend(prop_id.to_raw_array());
             }
             OpCode::IsEq => {
                 out.push(Bytecode::IsEq as u8);
