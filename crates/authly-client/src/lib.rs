@@ -235,16 +235,26 @@ impl Client {
     /// This involves sending a Certificate Signing Request for Authly to resolve.
     ///
     /// Returns a pair of Certificate signed by the Authly Local CA, and the matching private key to be used by the server.
+    ///
+    /// The common name can be any chosen text identifying the service.
+    ///
     pub async fn generate_server_tls_params(
         &self,
-        common_name: &str,
+        subject_common_name: &str,
+        subject_alt_names: Vec<String>,
     ) -> Result<(CertificateDer<'static>, PrivateKeyDer<'static>), Error> {
         let params = {
-            let mut params = CertificateParams::new(vec![common_name.to_string()])
-                .map_err(|_| Error::InvalidCommonName)?;
+            let mut params =
+                CertificateParams::new(subject_alt_names).map_err(|_| Error::InvalidAltNames)?;
             params
                 .distinguished_name
-                .push(DnType::CommonName, common_name);
+                .push(DnType::CommonName, subject_common_name);
+            params.distinguished_name.push(
+                DnType::CustomDnType(
+                    authly_common::certificate::oid::ENTITY_UNIQUE_IDENTIFIER.to_vec(),
+                ),
+                self.state.conn.load().params.entity_id.to_string(),
+            );
             params.use_authority_key_identifier_extension = false;
             params.key_usages.push(KeyUsagePurpose::DigitalSignature);
             params
@@ -301,7 +311,8 @@ impl Client {
     #[cfg(feature = "rustls_023")]
     pub async fn rustls_server_configurer(
         &self,
-        common_name: impl Into<Cow<'static, str>>,
+        subject_common_name: impl Into<Cow<'static, str>>,
+        subject_alt_names: Vec<String>,
     ) -> Result<futures_util::stream::BoxStream<'static, Arc<rustls::ServerConfig>>, Error> {
         use std::time::Duration;
 
@@ -312,7 +323,8 @@ impl Client {
         async fn rebuild_server_config(
             client: Client,
             params: Arc<ConnectionParams>,
-            common_name: Cow<'static, str>,
+            subject_common_name: Cow<'static, str>,
+            subject_alt_names: Vec<String>,
         ) -> Result<Arc<rustls::ServerConfig>, Error> {
             let mut root_cert_store = RootCertStore::empty();
             root_cert_store
@@ -322,7 +334,9 @@ impl Client {
                 )
                 .map_err(|_err| Error::AuthlyCA("unable to include in root cert store"))?;
 
-            let (cert, key) = client.generate_server_tls_params(&common_name).await?;
+            let (cert, key) = client
+                .generate_server_tls_params(&subject_common_name, subject_alt_names)
+                .await?;
 
             let mut tls_config = rustls::server::ServerConfig::builder()
                 .with_client_cert_verifier(
@@ -338,18 +352,24 @@ impl Client {
         }
 
         let client = self.clone();
-        let common_name = common_name.into();
+        let subject_common_name = subject_common_name.into();
         let mut reconfigured_rx = self.state.reconfigured_rx.clone();
         let initial_params = reconfigured_rx.borrow_and_update().clone();
-        let initial_tls_config =
-            rebuild_server_config(client.clone(), initial_params, common_name.clone()).await?;
+        let initial_tls_config = rebuild_server_config(
+            client.clone(),
+            initial_params,
+            subject_common_name.clone(),
+            subject_alt_names.clone(),
+        )
+        .await?;
 
         let immediate_stream = futures_util::stream::iter([initial_tls_config]);
 
         let rotation_stream =
             futures_util::stream::unfold(reconfigured_rx, move |mut reconfigured_rx| {
                 let client = client.clone();
-                let common_name = common_name.clone();
+                let subject_common_name = subject_common_name.clone();
+                let subject_alt_names = subject_alt_names.clone();
 
                 async move {
                     // wait for configuration change
@@ -357,9 +377,13 @@ impl Client {
 
                     loop {
                         let params = reconfigured_rx.borrow_and_update().clone();
-                        let server_config_result =
-                            rebuild_server_config(client.clone(), params, common_name.clone())
-                                .await;
+                        let server_config_result = rebuild_server_config(
+                            client.clone(),
+                            params,
+                            subject_common_name.clone(),
+                            subject_alt_names.clone(),
+                        )
+                        .await;
 
                         match server_config_result {
                             Ok(server_config) => return Some((server_config, reconfigured_rx)),

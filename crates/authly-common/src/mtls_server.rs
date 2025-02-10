@@ -5,7 +5,7 @@ use hyper::body::Incoming;
 use tracing::warn;
 use x509_parser::prelude::{FromDer, X509Certificate};
 
-use crate::id::Eid;
+use crate::{certificate::oid::ENTITY_UNIQUE_IDENTIFIER, id::Eid};
 
 /// A [Request] extension representing the peer Authly service that connected to the local server.
 #[derive(Clone, Copy, Debug)]
@@ -32,14 +32,18 @@ impl tower_server::tls::TlsConnectionMiddleware for MTLSMiddleware {
 
         for rdn in peer_cert.subject.iter() {
             for attr in rdn.iter() {
-                if attr.attr_type() == &x509_parser::oid_registry::OID_X509_COMMON_NAME {
-                    if let Ok(common_name) = attr.attr_value().as_str() {
-                        if let Ok(entity_id) = common_name.parse() {
-                            data.peer_service_entity = Some(entity_id);
-                        } else {
-                            warn!("failed to parse common name: `{common_name}`");
+                if let Some(attr_type) = attr.attr_type().iter() {
+                    if attr_type.eq(ENTITY_UNIQUE_IDENTIFIER.iter().copied()) {
+                        if let Ok(value) = attr.attr_value().as_str() {
+                            if let Ok(entity_id) = value.parse() {
+                                data.peer_service_entity = Some(entity_id);
+                            } else {
+                                warn!("failed to parse entity ID: `{value}`");
+                            }
                         }
                     }
+                } else {
+                    warn!("unparsable attribute");
                 }
             }
         }

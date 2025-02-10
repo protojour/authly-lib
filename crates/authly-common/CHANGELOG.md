@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `entity-attribute-binding` renamed to `entity-attribute-assignment`. Now accepts only one parameter for identifying the entity.
 - Protobuf definitions changed into using `authly.` package prefix.
 
+### Added
+- x509 oid extension for Entity ID
+
 ## [0.0.5] - 2025-01-30
 ### Changed
 - mandate submission reponse type
