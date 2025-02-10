@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Make access control test-friendly with dynamically-dispatched `AccessControl` trait.
 - `NamespacedPropertyAttribute` trait for making less verbose access control requests.
 - `request_client_builder_stream` not async anymore.
+- CSR API changed to accept any common name and explicit list of alternative names
 
 ### Added
 - `ConnectionParams` now public, and added a stream of `Arc<ConnectionParam>` to the Client API.

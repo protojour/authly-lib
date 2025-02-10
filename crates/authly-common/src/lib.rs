@@ -8,6 +8,7 @@ use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
 use serde::de::{Error, Visitor};
 
+pub mod certificate;
 pub mod id;
 pub mod property;
 pub mod proto;

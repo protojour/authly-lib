@@ -10,7 +10,7 @@ use crate::{
     background_worker::{spawn_background_worker, WorkerSenders},
     connection::{make_connection, ConnectionParams, ReconfigureStrategy},
     error,
-    identity::Identity,
+    identity::{parse_identity_data, Identity},
     Client, ClientState, Error, IDENTITY_PATH, K8S_SA_TOKENFILE_PATH, LOCAL_CA_CERT_PATH,
 };
 
@@ -35,7 +35,6 @@ impl ClientBuilder {
     /// Use the given CA certificate to verify the Authly server
     pub fn with_authly_local_ca_pem(mut self, ca: Vec<u8>) -> Result<Self, Error> {
         self.inner.inference = Inference::Manual;
-        self.inner.jwt_decoding_key = Some(jwt_decoding_key_from_cert(&ca)?);
         self.inner.authly_local_ca = Some(ca);
         Ok(self)
     }
@@ -121,7 +120,6 @@ pub(crate) struct ConnectionParamsBuilder {
     pub url: Cow<'static, str>,
     pub authly_local_ca: Option<Vec<u8>>,
     pub identity: Option<Identity>,
-    pub jwt_decoding_key: Option<jsonwebtoken::DecodingKey>,
 }
 
 impl ConnectionParamsBuilder {
@@ -131,7 +129,6 @@ impl ConnectionParamsBuilder {
             url,
             authly_local_ca: None,
             identity: None,
-            jwt_decoding_key: None,
         }
     }
 
@@ -140,7 +137,6 @@ impl ConnectionParamsBuilder {
         self.inference = Inference::Inferred;
         let authly_local_ca =
             std::fs::read(LOCAL_CA_CERT_PATH).map_err(|_| Error::AuthlyCAmissingInEtc)?;
-        self.jwt_decoding_key = Some(jwt_decoding_key_from_cert(&authly_local_ca)?);
 
         if std::fs::exists(IDENTITY_PATH).unwrap_or(false) {
             self.authly_local_ca = Some(authly_local_ca);
@@ -195,12 +191,12 @@ impl ConnectionParamsBuilder {
             .authly_local_ca
             .clone()
             .ok_or_else(|| Error::AuthlyCA("unconfigured"))?;
-        let jwt_decoding_key = self
-            .jwt_decoding_key
-            .ok_or_else(|| Error::AuthlyCA("public key not found"))?;
         let identity = self
             .identity
             .ok_or_else(|| Error::Identity("unconfigured"))?;
+
+        let jwt_decoding_key = jwt_decoding_key_from_cert(&authly_local_ca)?;
+        let identity_data = parse_identity_data(&identity.cert_pem)?;
 
         Ok(Arc::new(ConnectionParams {
             inference: self.inference,
@@ -208,6 +204,7 @@ impl ConnectionParamsBuilder {
             authly_local_ca,
             jwt_decoding_key,
             identity,
+            entity_id: identity_data.entity_id,
         }))
     }
 }

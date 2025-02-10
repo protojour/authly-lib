@@ -2,7 +2,7 @@
 
 use std::{borrow::Cow, sync::Arc};
 
-use authly_common::proto::service::authly_service_client::AuthlyServiceClient;
+use authly_common::{id::Eid, proto::service::authly_service_client::AuthlyServiceClient};
 use tonic::transport::Endpoint;
 
 use crate::{
@@ -19,6 +19,7 @@ pub struct ConnectionParams {
     pub(crate) url: Cow<'static, str>,
     pub(crate) authly_local_ca: Vec<u8>,
     pub(crate) identity: Identity,
+    pub(crate) entity_id: Eid,
     pub(crate) jwt_decoding_key: jsonwebtoken::DecodingKey,
 }
 
