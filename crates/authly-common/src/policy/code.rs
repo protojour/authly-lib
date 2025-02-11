@@ -3,6 +3,8 @@
 use int_enum::IntEnum;
 use serde::{Deserialize, Serialize};
 
+use crate::id::{AttrId, EntityId, PropId};
+
 /// The value/outcome of a policy engine evaluation.
 #[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash, Debug)]
 pub enum PolicyValue {
@@ -37,12 +39,12 @@ impl From<bool> for PolicyValue {
 #[derive(PartialEq, Eq, Debug)]
 #[allow(missing_docs)]
 pub enum OpCode {
-    LoadSubjectId(u128),
+    LoadSubjectId(PropId),
     LoadSubjectAttrs,
-    LoadResourceId(u128),
+    LoadResourceId(PropId),
     LoadResourceAttrs,
-    LoadConstEntityId(u128),
-    LoadConstAttrId(u128),
+    LoadConstEntityId(EntityId),
+    LoadConstAttrId(AttrId),
     IsEq,
     SupersetOf,
     IdSetContains,
@@ -78,27 +80,28 @@ pub fn to_bytecode(opcodes: &[OpCode]) -> Vec<u8> {
 
     for opcode in opcodes {
         match opcode {
-            OpCode::LoadSubjectId(eid) => {
+            OpCode::LoadSubjectId(prop_id) => {
                 out.push(Bytecode::LoadSubjectId as u8);
-                out.extend(unsigned_varint::encode::u128(*eid, &mut Default::default()));
+                out.extend(prop_id.to_raw_array());
             }
             OpCode::LoadSubjectAttrs => {
                 out.push(Bytecode::LoadSubjectAttrs as u8);
             }
-            OpCode::LoadResourceId(eid) => {
+            OpCode::LoadResourceId(prop_id) => {
                 out.push(Bytecode::LoadResourceId as u8);
-                out.extend(unsigned_varint::encode::u128(*eid, &mut Default::default()));
+                out.extend(prop_id.to_raw_array());
             }
             OpCode::LoadResourceAttrs => {
                 out.push(Bytecode::LoadResourceAttrs as u8);
             }
-            OpCode::LoadConstEntityId(id) => {
+            OpCode::LoadConstEntityId(eid) => {
                 out.push(Bytecode::LoadConstEntityId as u8);
-                out.extend(unsigned_varint::encode::u128(*id, &mut Default::default()));
+                out.push(eid.kind().into());
+                out.extend(eid.id);
             }
-            OpCode::LoadConstAttrId(id) => {
+            OpCode::LoadConstAttrId(prop_id) => {
                 out.push(Bytecode::LoadConstAttrId as u8);
-                out.extend(unsigned_varint::encode::u128(*id, &mut Default::default()));
+                out.extend(prop_id.to_raw_array());
             }
             OpCode::IsEq => {
                 out.push(Bytecode::IsEq as u8);

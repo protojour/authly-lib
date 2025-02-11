@@ -1,13 +1,13 @@
 //! Client service metadata.
 
-use authly_common::id::Eid;
+use authly_common::id::ServiceId;
 
 /// A structure which provides various pieces of information about the service.
 ///
 /// Metadata is not required for the service to function, but can be used optionally to
 /// convey application-specific data from the Authly database to the service.
 pub struct ServiceMetadata {
-    pub(crate) entity_id: Eid,
+    pub(crate) entity_id: ServiceId,
 
     pub(crate) label: String,
 
@@ -15,8 +15,8 @@ pub struct ServiceMetadata {
 }
 
 impl ServiceMetadata {
-    /// Get the entity ID ([Eid]) of the Authly service this client identifies as.
-    pub fn entity_id(&self) -> Eid {
+    /// Get the entity ID ([ServiceId]) of the Authly service this client identifies as.
+    pub fn entity_id(&self) -> ServiceId {
         self.entity_id
     }
 

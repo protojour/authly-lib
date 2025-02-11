@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - improved implementation of policy engine with new logical model for policy combinations.
 - `entity-attribute-binding` renamed to `entity-attribute-assignment`. Now accepts only one parameter for identifying the entity.
 - Protobuf definitions changed into using `authly.` package prefix.
+- `Eid` removed, replaced by `PersonaId`, `GroupId`, `ServiceId` and their dynamic union: `EntityId`.
 
 ### Added
 - x509 oid extension for Entity ID
