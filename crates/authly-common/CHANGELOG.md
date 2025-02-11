@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## [0.0.6] - 2025-02-11
+## [0.0.7] - 2025-02-11
 ### Changed
 - namespace level added to property mapping protobuf.
 - decouple policies from services, introduce `domain` concept into document model.
