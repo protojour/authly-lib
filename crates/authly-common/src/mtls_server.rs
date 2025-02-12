@@ -15,10 +15,17 @@ pub struct PeerServiceEntity(pub ServiceId);
 #[derive(Clone)]
 pub struct MTLSMiddleware;
 
-/// The
+/// The data extracted from the TLS connection
 #[derive(Default)]
 pub struct MTLSConnectionData {
     peer_service_entity: Option<ServiceId>,
+}
+
+impl MTLSConnectionData {
+    /// Get the peer service entity
+    pub fn peer_service_entity(&self) -> Option<ServiceId> {
+        self.peer_service_entity
+    }
 }
 
 impl tower_server::tls::TlsConnectionMiddleware for MTLSMiddleware {
