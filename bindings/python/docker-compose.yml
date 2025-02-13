@@ -1,0 +1,72 @@
+x-authly-env: &authly-env
+  AUTHLY_UID: c865e85720e3c96feabdfe50c33acc75ac2069320de78d0d2c11497b092f1a8c
+  AUTHLY_BAO_TOKEN: theenigmaticbaobunofancientsecrets
+  AUTHLY_BAO_URL: http://openbao:8200
+  AUTHLY_HOSTNAME: localhost
+  AUTHLY_K8S: "false"
+  AUTHLY_CLUSTER_API_SECRET: ifyougetholdofthisclassifiedpieceofinformationiwillunfortunatelyhavetokillyou
+  AUTHLY_CLUSTER_RAFT_SECRET: donttellanybodyabouttheverysecretstring
+
+x-authly-volumes: &authly-volumes
+  - authly-data:/var/lib/authly/data
+  - .local/etc/authly:/etc/authly
+  - ./tests/documents:/etc/authly/documents:ro
+
+name: authly-python
+
+services:
+  # Supported secrets store
+  openbao:
+    image: ghcr.io/openbao/openbao
+    environment:
+      # do not use this approach in production
+      BAO_DEV_ROOT_TOKEN_ID: theenigmaticbaobunofancientsecrets
+
+  # Prelude: issue-cluster-key
+  authly-prelude-1:
+    image: protojour/authly:dev
+    environment:
+      <<: *authly-env
+      AUTHLY_HOSTNAME: localhost
+      AUTHLY_K8S: true
+    volumes: *authly-volumes
+    command: issue-cluster-key
+    depends_on:
+      openbao:
+        condition: service_started
+
+  # Prelude: configure
+  authly-prelude-2:
+    image: protojour/authly:dev
+    environment:
+      <<: *authly-env
+      AUTHLY_EXPORT_TLS_TO_ETC: "true"
+    volumes: *authly-volumes
+    command: configure
+    depends_on:
+      openbao:
+        condition: service_started
+      authly-prelude-1:
+        condition: service_completed_successfully
+
+  # Run Authly server
+  authly:
+    image: protojour/authly:dev
+    environment:
+      <<: *authly-env
+      # AUTHLY_LOG: trace,openraft=info
+      AUTHLY_LOG: info
+      AUTHLY_DEBUG_WEB_PORT: "12345"
+    ports:
+      - 1443:443
+      - 12345:12345
+    volumes: *authly-volumes
+    command: serve
+    depends_on:
+      openbao:
+        condition: service_started
+      authly-prelude-2:
+        condition: service_completed_successfully
+
+volumes:
+  authly-data:

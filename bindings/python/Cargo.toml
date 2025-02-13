@@ -1,0 +1,23 @@
+[package]
+name = "authly-client-python"
+version = "0.1.0"
+edition = "2021"
+authors = ["Protojour dev team <devs@protojour.com>"]
+license = "Apache-2.0"
+readme = "README.md"
+description ="Authly client python bindings"
+repository = "https://github.com/protojour/authly-lib"
+
+[lib]
+name = "authly"
+crate-type = ["cdylib"]
+
+[dependencies]
+authly-client = { path = "../../crates/authly-client" }
+pyo3 = { version = "0.23", features = ["extension-module", "experimental-async"] }
+pyo3-async-runtimes = { version = "0.23", features = ["attributes", "tokio-runtime"] }
+tokio = "1"
+
+[profile.release]
+codegen-units = 1
+lto = true

@@ -2,6 +2,7 @@
 members = [
     "crates/authly-client",
     "crates/authly-common",
+    "bindings/python",
 ]
 resolver = "2"
 
