@@ -189,7 +189,10 @@ pub struct EntityProperty {
 #[serde(deny_unknown_fields)]
 pub struct KubernetesAccount {
     /// The kubernetes namespace.
-    pub namespace: String,
+    ///
+    /// If unspecified, it means the same namespace that Authly itself is deployed within.
+    #[serde(default)]
+    pub namespace: Option<String>,
 
     /// The account name.
     pub name: String,
