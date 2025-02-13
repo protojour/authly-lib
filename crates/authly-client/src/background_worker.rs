@@ -4,9 +4,8 @@ use authly_common::proto::service::{self as proto};
 use tonic::Streaming;
 
 use crate::{
-    access_control,
     connection::{make_connection, ConnectionParams},
-    error, ClientState, Error,
+    error, get_configuration, ClientState, Error,
 };
 
 pub struct WorkerSenders {
@@ -142,11 +141,9 @@ async fn init_message_stream(
 }
 
 async fn reload_local_cache(state: &ClientState, senders: &WorkerSenders) {
-    match access_control::get_resource_property_mapping(state.conn.load().authly_service.clone())
-        .await
-    {
-        Ok(property_mapping) => {
-            state.resource_property_mapping.store(property_mapping);
+    match get_configuration(state.conn.load().authly_service.clone()).await {
+        Ok(configuration) => {
+            state.configuration.store(Arc::new(configuration));
             if let Err(err) = senders.metadata_invalidated_tx.send(()) {
                 tracing::error!(?err, "Could not publish metadata invalidated");
             }

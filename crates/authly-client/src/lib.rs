@@ -81,11 +81,19 @@ struct ClientState {
     /// signal sent when the state is dropped
     closed_tx: tokio::sync::watch::Sender<()>,
 
+    /// current configuration
+    configuration: ArcSwap<Configuration>,
+}
+
+struct Configuration {
+    /// service hosts
+    hosts: Vec<String>,
+
     /// The resource property mapping for this service.
     /// It's kept in an ArcSwap to potentially support live-update of this structure.
     /// For that to work, the client should keep a subscription option and listen
     /// for change events and re-download the property mapping.
-    resource_property_mapping: ArcSwap<NamespacePropertyMapping>,
+    resource_property_mapping: Arc<NamespacePropertyMapping>,
 }
 
 impl Drop for ClientState {
@@ -178,7 +186,11 @@ impl Client {
 
     /// Get the current resource properties of this service, in the form of a [NamespacePropertyMapping].
     pub fn get_resource_property_mapping(&self) -> Arc<NamespacePropertyMapping> {
-        self.state.resource_property_mapping.load_full()
+        self.state
+            .configuration
+            .load()
+            .resource_property_mapping
+            .clone()
     }
 
     /// Decode and validate an Authly [AccessToken].
@@ -242,11 +254,10 @@ impl Client {
     pub async fn generate_server_tls_params(
         &self,
         subject_common_name: &str,
-        subject_alt_names: Vec<String>,
     ) -> Result<(CertificateDer<'static>, PrivateKeyDer<'static>), Error> {
+        let hosts = self.state.configuration.load().hosts.clone();
         let params = {
-            let mut params =
-                CertificateParams::new(subject_alt_names).map_err(|_| Error::InvalidAltNames)?;
+            let mut params = CertificateParams::new(hosts).map_err(|_| Error::InvalidAltNames)?;
             params
                 .distinguished_name
                 .push(DnType::CommonName, subject_common_name);
@@ -313,7 +324,6 @@ impl Client {
     pub async fn rustls_server_configurer(
         &self,
         subject_common_name: impl Into<Cow<'static, str>>,
-        subject_alt_names: Vec<String>,
     ) -> Result<futures_util::stream::BoxStream<'static, Arc<rustls::ServerConfig>>, Error> {
         use std::time::Duration;
 
@@ -325,7 +335,6 @@ impl Client {
             client: Client,
             params: Arc<ConnectionParams>,
             subject_common_name: Cow<'static, str>,
-            subject_alt_names: Vec<String>,
         ) -> Result<Arc<rustls::ServerConfig>, Error> {
             let mut root_cert_store = RootCertStore::empty();
             root_cert_store
@@ -336,7 +345,7 @@ impl Client {
                 .map_err(|_err| Error::AuthlyCA("unable to include in root cert store"))?;
 
             let (cert, key) = client
-                .generate_server_tls_params(&subject_common_name, subject_alt_names)
+                .generate_server_tls_params(&subject_common_name)
                 .await?;
 
             let mut tls_config = rustls::server::ServerConfig::builder()
@@ -356,13 +365,9 @@ impl Client {
         let subject_common_name = subject_common_name.into();
         let mut reconfigured_rx = self.state.reconfigured_rx.clone();
         let initial_params = reconfigured_rx.borrow_and_update().clone();
-        let initial_tls_config = rebuild_server_config(
-            client.clone(),
-            initial_params,
-            subject_common_name.clone(),
-            subject_alt_names.clone(),
-        )
-        .await?;
+        let initial_tls_config =
+            rebuild_server_config(client.clone(), initial_params, subject_common_name.clone())
+                .await?;
 
         let immediate_stream = futures_util::stream::iter([initial_tls_config]);
 
@@ -370,7 +375,6 @@ impl Client {
             futures_util::stream::unfold(reconfigured_rx, move |mut reconfigured_rx| {
                 let client = client.clone();
                 let subject_common_name = subject_common_name.clone();
-                let subject_alt_names = subject_alt_names.clone();
 
                 async move {
                     // wait for configuration change
@@ -382,7 +386,6 @@ impl Client {
                             client.clone(),
                             params,
                             subject_common_name.clone(),
-                            subject_alt_names.clone(),
                         )
                         .await;
 
@@ -473,4 +476,21 @@ impl Client {
 
 fn id_codec_error() -> Error {
     Error::Codec(anyhow!("id decocing error"))
+}
+
+async fn get_configuration(
+    mut service: AuthlyServiceClient<Channel>,
+) -> Result<Configuration, Error> {
+    let response = service
+        .get_configuration(proto::Empty::default())
+        .await
+        .map_err(error::tonic)?
+        .into_inner();
+
+    Ok(Configuration {
+        hosts: response.hosts,
+        resource_property_mapping: access_control::get_resource_property_mapping(
+            response.property_mapping_namespaces,
+        )?,
+    })
 }
