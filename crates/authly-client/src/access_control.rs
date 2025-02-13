@@ -4,12 +4,12 @@ use std::{future::Future, pin::Pin, sync::Arc};
 
 use authly_common::{
     id::{AttrId, EntityId, Id128DynamicArrayConv},
-    proto::service::{self as proto, authly_service_client::AuthlyServiceClient},
+    proto::service::{self as proto},
     service::{NamespacePropertyMapping, NamespacedPropertyAttribute},
 };
 use fnv::FnvHashSet;
 use http::header::AUTHORIZATION;
-use tonic::{transport::Channel, Request};
+use tonic::Request;
 use tracing::debug;
 
 use crate::{error, id_codec_error, token::AccessToken, Client, Error};
@@ -130,17 +130,12 @@ impl<'c> AccessControlRequestBuilder<'c> {
     }
 }
 
-pub(crate) async fn get_resource_property_mapping(
-    mut service: AuthlyServiceClient<Channel>,
+pub(crate) fn get_resource_property_mapping(
+    proto_namespaces: Vec<proto::PropertyMappingNamespace>,
 ) -> Result<Arc<NamespacePropertyMapping>, Error> {
-    let response = service
-        .get_resource_property_mappings(proto::Empty::default())
-        .await
-        .map_err(error::tonic)?;
-
     let mut property_mapping = NamespacePropertyMapping::default();
 
-    for namespace in response.into_inner().namespaces {
+    for namespace in proto_namespaces {
         let ns = property_mapping.namespace_mut(namespace.label);
 
         for property in namespace.properties {
@@ -160,7 +155,14 @@ pub(crate) async fn get_resource_property_mapping(
 
 impl AccessControl for Client {
     fn access_control_request(&self) -> AccessControlRequestBuilder<'_> {
-        AccessControlRequestBuilder::new(self, self.state.resource_property_mapping.load_full())
+        AccessControlRequestBuilder::new(
+            self,
+            self.state
+                .configuration
+                .load()
+                .resource_property_mapping
+                .clone(),
+        )
     }
 
     fn evaluate(

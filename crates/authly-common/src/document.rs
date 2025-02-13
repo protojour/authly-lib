@@ -101,6 +101,10 @@ pub struct Entity {
     #[serde(default, rename = "password-hash")]
     pub password_hash: Vec<String>,
 
+    /// A list of service hostnames
+    #[serde(default)]
+    pub hosts: Vec<String>,
+
     /// An optional kubernetes account.
     #[serde(default, rename = "kubernetes-account")]
     pub kubernetes_account: Option<KubernetesAccount>,

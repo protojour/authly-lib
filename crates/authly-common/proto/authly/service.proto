@@ -4,6 +4,9 @@ package authly.service;
 import "google/protobuf/struct.proto";
 
 service AuthlyService {
+    // Fetch the configuration of this service.
+    rpc GetConfiguration (Empty) returns (ServiceConfiguration);
+
     // Fetch metadata about the service using this API.
     rpc GetMetadata (Empty) returns (ServiceMetadata);
 
@@ -11,7 +14,7 @@ service AuthlyService {
     // The session info is passed as Authorization header or cookie.
     rpc GetAccessToken (Empty) returns (AccessToken);
 
-    // Get the current property mapping for the service.
+    // Get the current property mapping for the service (deprecated, use GetConfiguration).
     rpc GetResourcePropertyMappings (Empty) returns (PropertyMappingsResponse);
 
     // Perform remote access control.
@@ -28,7 +31,21 @@ service AuthlyService {
     rpc Pong (Empty) returns (Empty);
 }
 
+// Service configuration.
+//
+// Important information for the service to function.
+message ServiceConfiguration {
+    // Resource property mapping namespaces.
+    // Necessary for access control.
+    repeated PropertyMappingNamespace property_mapping_namespaces = 1;
+
+    // The hosts that can be used to reach this service.
+    repeated string hosts = 2;
+}
+
 // Metadata about the service.
+//
+// This information is less important than the ServiceConfiguration.
 message ServiceMetadata {
     // The entity ID of this service.
     bytes entity_id = 1;

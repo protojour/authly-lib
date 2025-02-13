@@ -6,10 +6,9 @@ use pem::{EncodeConfig, Pem};
 use rcgen::KeyPair;
 
 use crate::{
-    access_control,
     background_worker::{spawn_background_worker, WorkerSenders},
     connection::{make_connection, ConnectionParams, ReconfigureStrategy},
-    error,
+    error, get_configuration,
     identity::{parse_identity_data, Identity},
     Client, ClientState, Error, IDENTITY_PATH, K8S_SA_TOKENFILE_PATH, LOCAL_CA_CERT_PATH,
 };
@@ -84,9 +83,7 @@ impl ClientBuilder {
             Inference::Manual => ReconfigureStrategy::Params(params),
         };
 
-        let resource_property_mapping =
-            access_control::get_resource_property_mapping(connection.authly_service.clone())
-                .await?;
+        let configuration = get_configuration(connection.authly_service.clone()).await?;
 
         let (closed_tx, closed_rx) = tokio::sync::watch::channel(());
         let state = Arc::new(ClientState {
@@ -95,7 +92,7 @@ impl ClientBuilder {
             reconfigured_rx,
             metadata_invalidated_rx,
             closed_tx,
-            resource_property_mapping: ArcSwap::new(resource_property_mapping),
+            configuration: ArcSwap::new(Arc::new(configuration)),
         });
 
         spawn_background_worker(
