@@ -163,14 +163,12 @@ pub mod kind {
         Domain = 3,
         /// Policy kind.
         Policy = 4,
-        /// Policy binding kind.
-        PolicyBinding = 5,
         /// Property kind.
-        Property = 6,
+        Property = 5,
         /// Attribute kind.
-        Attribute = 7,
+        Attribute = 6,
         /// Directory kind.
-        Directory = 8,
+        Directory = 7,
     }
 
     impl Kind {
@@ -185,7 +183,6 @@ pub mod kind {
                 Self::Attribute => "atr",
                 Self::Directory => "dir",
                 Self::Policy => "pol",
-                Self::PolicyBinding => "plb",
             }
         }
 
@@ -196,7 +193,6 @@ pub mod kind {
                 Kind::Service => "service ID",
                 Kind::Domain => "domain ID",
                 Kind::Policy => "policy ID",
-                Kind::PolicyBinding => "policy binding ID",
                 Kind::Property => "property ID",
                 Kind::Attribute => "attribute ID",
                 Kind::Directory => "directory ID",
@@ -210,7 +206,6 @@ pub mod kind {
                 Self::Service,
                 Self::Domain,
                 Self::Policy,
-                Self::PolicyBinding,
                 Self::Property,
                 Self::Attribute,
                 Self::Directory,
@@ -238,9 +233,6 @@ pub mod kind {
 
     /// Policy ID kind.
     pub struct Policy;
-
-    /// Policy binding ID kind.
-    pub struct PolicyBinding;
 
     /// Attribute ID kind.
     pub struct Property;
@@ -278,12 +270,6 @@ pub mod kind {
     impl IdKind for Policy {
         fn kind() -> Kind {
             Kind::Policy
-        }
-    }
-
-    impl IdKind for PolicyBinding {
-        fn kind() -> Kind {
-            Kind::PolicyBinding
         }
     }
 
@@ -373,9 +359,6 @@ pub type AttrId = Id128<kind::Attrbute>;
 
 /// Authly Policy ID
 pub type PolicyId = Id128<kind::Policy>;
-
-/// Authly Policy Binding ID
-pub type PolicyBindingId = Id128<kind::PolicyBinding>;
 
 /// Authly Domain ID
 pub type DomainId = Id128<kind::Domain>;
