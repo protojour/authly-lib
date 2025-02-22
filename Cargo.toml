@@ -7,9 +7,9 @@ resolver = "2"
 
 [workspace.package]
 authors = ["Protojour dev team <devs@protojour.com>"]
-edition = "2021"
+edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/protojour/authly-lib"
 keywords = ["authly", "auth", "authority", "iam", "service-mesh"]
 categories = ["authentication", "cryptography"]
-rust-version = "1.83"
+rust-version = "1.85"
