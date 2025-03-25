@@ -41,7 +41,7 @@ impl<K> Id128<K> {
     /// Create a new random identifier.
     pub fn random() -> Self {
         loop {
-            let id: u128 = rand::thread_rng().r#gen();
+            let id: u128 = rand::rng().random();
             // low IDs are reserved for builtin/fixed
             if id > u16::MAX as u128 {
                 return Self(id.to_be_bytes(), PhantomData);
