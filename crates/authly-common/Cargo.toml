@@ -41,7 +41,7 @@ serde_json = "1"
 serde_spanned = { version = "0.6", optional = true }
 thiserror = "2"
 toml = { version = "0.8", optional = true }
-tonic = { version = "0.12", default-features = false, features = [
+tonic = { version = "0.13", default-features = false, features = [
     "prost",
     "codegen",
     "channel",
@@ -52,7 +52,7 @@ uuid = { version = "1", features = ["serde", "v4"], optional = true }
 x509-parser = { version = "0.17", optional = true }
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-build = "0.13"
 
 [dev-dependencies]
 indoc = "2"
