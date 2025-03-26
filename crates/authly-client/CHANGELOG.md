@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.0.9] - 2025-03-26
+### Changed
+- Breaking: Upgrade tonic to 0.13
+
 ## [0.0.8] - 2025-02-14
 ### Changed
 - Server certificate alt names now comes from Authly instead of being specified by the service.
