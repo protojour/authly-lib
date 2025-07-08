@@ -3,7 +3,7 @@ use std::{borrow::Cow, sync::Arc};
 use arc_swap::ArcSwap;
 use http::header::AUTHORIZATION;
 use pem::{EncodeConfig, Pem};
-use rcgen::KeyPair;
+use rcgen::{KeyPair, PublicKeyData};
 
 use crate::{
     background_worker::{spawn_background_worker, WorkerSenders},
@@ -157,7 +157,7 @@ impl ConnectionParamsBuilder {
                 .map_err(error::unclassified)?
                 .post("https://authly-k8s/api/v0/authenticate")
                 .header(AUTHORIZATION, format!("Bearer {token}"))
-                .body(key_pair.public_key_der())
+                .body(key_pair.subject_public_key_info())
                 .send()
                 .await
                 .map_err(error::unauthorized)?
