@@ -299,12 +299,12 @@ impl Client {
             .authly_service
             .clone()
             .sign_certificate(Request::new(proto::CertificateSigningRequest {
-                der: csr_der,
+                der: csr_der.into(),
             }))
             .await
             .map_err(error::tonic)?;
 
-        let certificate = CertificateDer::from(proto.into_inner().der);
+        let certificate = CertificateDer::from(proto.into_inner().der.to_vec());
         let private_key = PrivateKeyDer::try_from(key_pair.serialize_der()).map_err(|err| {
             Error::Unclassified(anyhow!("could not serialize private key: {err}"))
         })?;

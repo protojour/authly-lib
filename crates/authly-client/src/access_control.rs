@@ -174,14 +174,14 @@ impl AccessControl for Client {
                 resource_attributes: builder
                     .resource_attributes
                     .into_iter()
-                    .map(|attr| attr.to_array_dynamic().to_vec())
+                    .map(|attr| attr.to_array_dynamic().to_vec().into())
                     .collect(),
                 // Peer entity attributes are currently not known to the service:
                 peer_entity_attributes: vec![],
                 peer_entity_ids: builder
                     .peer_entity_ids
                     .into_iter()
-                    .map(|eid| eid.to_array_dynamic().to_vec())
+                    .map(|eid| eid.to_array_dynamic().to_vec().into())
                     .collect(),
             });
             if let Some(access_token) = builder.access_token {

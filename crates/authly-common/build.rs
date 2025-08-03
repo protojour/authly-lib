@@ -1,6 +1,7 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     tonic_prost_build::configure()
         .protoc_arg("--experimental_allow_proto3_optional")
+        .bytes(".")
         .compile_protos(
             &[
                 "proto/authly/connect.proto",
